@@ -1,0 +1,6 @@
+{
+  "name": "IPTV Stream Relay & Playlist Studio",
+  "description": "High-performance playlist fetcher and M3U/JSON generator for OTT Navigator, TiviMate, and IPTV players with 30-minute auto-refresh and channel customization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
