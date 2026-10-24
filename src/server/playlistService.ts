@@ -1,8 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 
+export interface PlaylistSource {
+  id: string; // e.g. 'plugx', 'server-lrl45', 'zeotv'
+  name: string;
+  url: string;
+  enabled: boolean;
+  lastSyncTime: string | null;
+  status: 'idle' | 'fetching' | 'success' | 'error';
+  errorMessage: string | null;
+  channelCount: number;
+}
+
 export interface ChannelItem {
-  id: string; // unique identifier (tvg-id or slug)
+  id: string; // unique identifier
+  sourceId: string; // playlist source id
   tvgId: string;
   tvgName: string;
   tvgLogo: string;
@@ -28,15 +40,15 @@ export interface ChannelItem {
 }
 
 export interface PlaylistSettings {
-  upstreamUrl: string;
   syncIntervalMinutes: number;
   autoSync: boolean;
   userAgent: string;
-  removeGroupPrefix: string;
   customTvgUrl: string;
+  publicBaseUrl: string;
 }
 
 export interface CustomizationData {
+  sources: PlaylistSource[];
   channelOverrides: Record<string, {
     customName?: string;
     customGroup?: string;
@@ -51,7 +63,7 @@ export interface CustomizationData {
   settings: PlaylistSettings;
 }
 
-export interface SyncStatus {
+export interface GlobalSyncStatus {
   lastSyncTime: string | null;
   nextSyncTime: string | null;
   status: 'idle' | 'fetching' | 'success' | 'error';
@@ -59,27 +71,61 @@ export interface SyncStatus {
   totalChannels: number;
   activeChannels: number;
   totalGroups: number;
-  upstreamUrl: string;
   syncIntervalMinutes: number;
   autoSync: boolean;
+  publicBaseUrl: string;
+  sources: PlaylistSource[];
 }
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const CACHE_FILE = path.join(DATA_DIR, 'playlist-cache.json');
+const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
+const CACHE_FILE = path.join(DATA_DIR, 'playlist-multi-cache.json');
 const CUSTOMIZATIONS_FILE = path.join(DATA_DIR, 'customizations.json');
 
+const DEFAULT_SOURCES: PlaylistSource[] = [
+  {
+    id: 'plugx',
+    name: 'Plugx VIP Playlist',
+    url: 'https://plugxvipplaylist.lovable.app/api/playlist',
+    enabled: true,
+    lastSyncTime: null,
+    status: 'idle',
+    errorMessage: null,
+    channelCount: 0,
+  },
+  {
+    id: 'server-lrl45',
+    name: 'Vaathala & Hotstar Live',
+    url: 'https://server.lrl45.workers.dev/channel/raw?=m3u',
+    enabled: true,
+    lastSyncTime: null,
+    status: 'idle',
+    errorMessage: null,
+    channelCount: 0,
+  },
+  {
+    id: 'zeotv',
+    name: 'SunNXT & StreamX Live',
+    url: 'https://zeotvyash.streamxlivenow.workers.dev/',
+    enabled: true,
+    lastSyncTime: null,
+    status: 'idle',
+    errorMessage: null,
+    channelCount: 0,
+  },
+];
+
 const DEFAULT_SETTINGS: PlaylistSettings = {
-  upstreamUrl: 'https://plugxvipplaylist.lovable.app/api/playlist',
   syncIntervalMinutes: 30,
   autoSync: true,
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 IPTV/1.0',
-  removeGroupPrefix: '',
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 IPTV/2.0',
   customTvgUrl: '',
+  publicBaseUrl: '',
 };
 
 class PlaylistService {
-  private channels: ChannelItem[] = [];
-  private headerDirectives: string[] = [];
+  private sources: PlaylistSource[] = [...DEFAULT_SOURCES];
+  private sourceHeaders: Record<string, string[]> = {};
+  private channelsBySource: Record<string, ChannelItem[]> = {};
   private settings: PlaylistSettings = { ...DEFAULT_SETTINGS };
   private channelOverrides: CustomizationData['channelOverrides'] = {};
   private groupRenames: Record<string, string> = {};
@@ -89,14 +135,13 @@ class PlaylistService {
   private lastSyncTime: Date | null = null;
   private nextSyncTime: Date | null = null;
   private syncTimer: NodeJS.Timeout | null = null;
-  private syncStatus: 'idle' | 'fetching' | 'success' | 'error' = 'idle';
-  private errorMessage: string | null = null;
+  private isSyncingAll = false;
   private isInitialized = false;
 
   constructor() {
     this.ensureDataDir();
     this.loadCustomizations();
-    this.loadCachedPlaylist();
+    this.loadCache();
   }
 
   private ensureDataDir() {
@@ -114,6 +159,20 @@ class PlaylistService {
       if (fs.existsSync(CUSTOMIZATIONS_FILE)) {
         const raw = fs.readFileSync(CUSTOMIZATIONS_FILE, 'utf-8');
         const data: Partial<CustomizationData> = JSON.parse(raw);
+        if (Array.isArray(data.sources) && data.sources.length > 0) {
+          // Merge default sources with saved sources to ensure new default sources exist
+          const loadedMap = new Map(data.sources.map((s) => [s.id, s]));
+          this.sources = DEFAULT_SOURCES.map((def) => {
+            const saved = loadedMap.get(def.id);
+            return saved ? { ...def, ...saved } : def;
+          });
+          // Add any custom sources added by user
+          for (const s of data.sources) {
+            if (!this.sources.some((x) => x.id === s.id)) {
+              this.sources.push(s);
+            }
+          }
+        }
         if (data.channelOverrides) this.channelOverrides = data.channelOverrides;
         if (data.groupRenames) this.groupRenames = data.groupRenames;
         if (data.groupVisibility) this.groupVisibility = data.groupVisibility;
@@ -129,6 +188,7 @@ class PlaylistService {
     this.ensureDataDir();
     try {
       const data: CustomizationData = {
+        sources: this.sources,
         channelOverrides: this.channelOverrides,
         groupRenames: this.groupRenames,
         groupVisibility: this.groupVisibility,
@@ -141,34 +201,39 @@ class PlaylistService {
     }
   }
 
-  private loadCachedPlaylist() {
+  private loadCache() {
     try {
       if (fs.existsSync(CACHE_FILE)) {
         const raw = fs.readFileSync(CACHE_FILE, 'utf-8');
         const cache = JSON.parse(raw);
-        if (Array.isArray(cache.channels)) {
-          this.channels = cache.channels;
-          this.headerDirectives = cache.headerDirectives || [];
+        if (cache.channelsBySource) {
+          this.channelsBySource = cache.channelsBySource;
+          this.sourceHeaders = cache.sourceHeaders || {};
           this.lastSyncTime = cache.lastSyncTime ? new Date(cache.lastSyncTime) : null;
+          // Update channel counts in sources
+          for (const src of this.sources) {
+            const chs = this.channelsBySource[src.id] || [];
+            src.channelCount = chs.length;
+          }
           this.applyCustomizations();
         }
       }
     } catch (err) {
-      console.error('Failed to load cached playlist:', err);
+      console.error('Failed to load multi-source cache:', err);
     }
   }
 
-  private saveCachedPlaylist() {
+  private saveCache() {
     this.ensureDataDir();
     try {
       const cache = {
         lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
-        headerDirectives: this.headerDirectives,
-        channels: this.channels,
+        sourceHeaders: this.sourceHeaders,
+        channelsBySource: this.channelsBySource,
       };
       fs.writeFileSync(CACHE_FILE, JSON.stringify(cache), 'utf-8');
     } catch (err) {
-      console.error('Failed to save cached playlist:', err);
+      console.error('Failed to save multi-source cache:', err);
     }
   }
 
@@ -176,12 +241,13 @@ class PlaylistService {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Initial fetch if no cached channels or if cached data is empty
-    if (this.channels.length === 0) {
-      await this.fetchUpstream();
+    // Check if any source lacks cached channels
+    const hasAnyChannels = Object.values(this.channelsBySource).some((arr) => arr.length > 0);
+    if (!hasAnyChannels) {
+      await this.fetchAllSources();
     } else {
-      // Background re-fetch to ensure fresh tokens
-      this.fetchUpstream().catch((e) => console.error('Initial background fetch error:', e));
+      // Background fresh sync
+      this.fetchAllSources().catch((e) => console.error('Initial background sync error:', e));
     }
 
     this.scheduleNextSync();
@@ -202,60 +268,105 @@ class PlaylistService {
     this.nextSyncTime = new Date(Date.now() + intervalMs);
 
     this.syncTimer = setInterval(async () => {
-      console.log(`[Sync Worker] Auto-sync triggered at ${new Date().toISOString()}`);
-      await this.fetchUpstream();
+      console.log(`[Sync Worker] Auto-syncing all sources at ${new Date().toISOString()}`);
+      await this.fetchAllSources();
       this.nextSyncTime = new Date(Date.now() + intervalMs);
     }, intervalMs);
   }
 
-  public async fetchUpstream(): Promise<{ success: boolean; message: string; count: number }> {
-    this.syncStatus = 'fetching';
-    this.errorMessage = null;
+  public async fetchSingleSource(sourceId: string): Promise<{ success: boolean; message: string; count: number }> {
+    const src = this.sources.find((s) => s.id === sourceId);
+    if (!src) {
+      return { success: false, message: `Source with ID "${sourceId}" not found`, count: 0 };
+    }
+
+    src.status = 'fetching';
+    src.errorMessage = null;
 
     try {
-      console.log(`[PlaylistService] Fetching from ${this.settings.upstreamUrl}...`);
+      console.log(`[PlaylistService] Fetching "${src.name}" from ${src.url}...`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout for large playlists
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-      const response = await fetch(this.settings.upstreamUrl, {
+      const response = await fetch(src.url, {
         headers: {
           'User-Agent': this.settings.userAgent || DEFAULT_SETTINGS.userAgent,
           'Accept': '*/*',
         },
         signal: controller.signal,
+        redirect: 'follow',
       });
 
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`Upstream returned HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const m3uText = await response.text();
       if (!m3uText.includes('#EXTM3U') && !m3uText.includes('#EXTINF')) {
-        throw new Error('Received content is not a valid M3U playlist format');
+        throw new Error('Response is not a valid M3U playlist format');
       }
 
-      this.parseM3U(m3uText);
-      this.lastSyncTime = new Date();
-      this.syncStatus = 'success';
-      this.saveCachedPlaylist();
+      const { channels, headers } = this.parseM3UContent(m3uText, src.id);
+      this.channelsBySource[src.id] = channels;
+      this.sourceHeaders[src.id] = headers;
 
-      const total = this.getAllChannels().length;
-      console.log(`[PlaylistService] Successfully fetched & parsed ${total} channels`);
-      return { success: true, message: `Successfully synced ${total} channels`, count: total };
+      src.channelCount = channels.length;
+      src.lastSyncTime = new Date().toISOString();
+      src.status = 'success';
+
+      this.applyCustomizations();
+      this.saveCache();
+      this.saveCustomizations();
+
+      console.log(`[PlaylistService] Source "${src.name}" synced: ${channels.length} channels`);
+      return { success: true, message: `Synced ${channels.length} channels from ${src.name}`, count: channels.length };
     } catch (err: any) {
-      console.error('[PlaylistService] Fetch error:', err);
-      this.syncStatus = 'error';
-      this.errorMessage = err.message || 'Unknown fetch error';
-      return { success: false, message: this.errorMessage || 'Fetch failed', count: this.channels.length };
+      console.error(`[PlaylistService] Error fetching source "${src.name}":`, err);
+      src.status = 'error';
+      src.errorMessage = err.message || 'Fetch failed';
+      this.saveCustomizations();
+      return { success: false, message: src.errorMessage || 'Fetch failed', count: src.channelCount };
     }
   }
 
-  private parseM3U(content: string) {
+  public async fetchAllSources(): Promise<{ success: boolean; message: string; totalChannels: number }> {
+    if (this.isSyncingAll) {
+      return { success: false, message: 'Sync already in progress', totalChannels: this.getAllChannels().length };
+    }
+
+    this.isSyncingAll = true;
+    const enabledSources = this.sources.filter((s) => s.enabled);
+    console.log(`[PlaylistService] Starting sync for ${enabledSources.length} enabled playlist sources...`);
+
+    let totalSynced = 0;
+    const errors: string[] = [];
+
+    for (const src of enabledSources) {
+      const result = await this.fetchSingleSource(src.id);
+      if (result.success) {
+        totalSynced += result.count;
+      } else {
+        errors.push(`${src.name}: ${result.message}`);
+      }
+    }
+
+    this.lastSyncTime = new Date();
+    this.isSyncingAll = false;
+
+    const total = this.getAllChannels().length;
+    if (errors.length === 0) {
+      return { success: true, message: `All ${enabledSources.length} sources synced successfully (${total} channels total)`, totalChannels: total };
+    } else {
+      return { success: errors.length < enabledSources.length, message: `Synced with warnings: ${errors.join('; ')}`, totalChannels: total };
+    }
+  }
+
+  private parseM3UContent(content: string, sourceId: string): { channels: ChannelItem[]; headers: string[] } {
     const rawLines = content.split(/\r?\n/);
     const parsedChannels: ChannelItem[] = [];
-    const headerDirectives: string[] = [];
+    const headers: string[] = [];
 
     let currentInf: {
       tvgId: string;
@@ -277,29 +388,29 @@ class PlaylistService {
       if (!line) continue;
 
       if (!hasSeenExtInf) {
-        if (line.startsWith('#EXTM3U')) {
-          headerDirectives.push(line);
-          continue;
-        }
-        if (line.startsWith('#') && !line.startsWith('#EXTINF')) {
-          headerDirectives.push(line);
+        if (line.startsWith('#EXTM3U') || (line.startsWith('#') && !line.startsWith('#EXTINF'))) {
+          headers.push(line);
           continue;
         }
       }
 
       if (line.startsWith('#EXTINF:')) {
         hasSeenExtInf = true;
-        // If we already had an unclosed INF without a URL, push or reset
         currentInf = this.parseExtInfLine(line);
         currentDirectives = [];
       } else if (line.startsWith('#')) {
-        // Kodi/VLC directive or clearkey note
         currentDirectives.push(line);
-      } else if (line.startsWith('http://') || line.startsWith('https://') || line.startsWith('rtmp://') || line.startsWith('udp://')) {
-        // Stream URL found
+      } else if (
+        line.startsWith('http://') ||
+        line.startsWith('https://') ||
+        line.startsWith('rtmp://') ||
+        line.startsWith('udp://')
+      ) {
         if (currentInf) {
-          const channelId = currentInf.tvgId || `${currentInf.name.replace(/[^a-zA-Z0-9]/g, '_')}_${parsedChannels.length + 1}`;
-          
+          const rawId = currentInf.tvgId || `${currentInf.name.replace(/[^a-zA-Z0-9]/g, '_')}_${parsedChannels.length + 1}`;
+          // Namespace ID with sourceId to avoid collisions across different providers
+          const channelId = `${sourceId}_${rawId}`;
+
           let hasClearKey = false;
           let clearKeySnippet = '';
           const clearkeyDirective = currentDirectives.find((d) => d.includes('license_key') || d.includes('clearkey'));
@@ -310,7 +421,8 @@ class PlaylistService {
 
           parsedChannels.push({
             id: channelId,
-            tvgId: currentInf.tvgId,
+            sourceId,
+            tvgId: currentInf.tvgId || rawId,
             tvgName: currentInf.tvgName,
             tvgLogo: currentInf.tvgLogo,
             tvgCategory: currentInf.tvgCategory,
@@ -332,15 +444,10 @@ class PlaylistService {
       }
     }
 
-    this.channels = parsedChannels;
-    if (headerDirectives.length > 0) {
-      this.headerDirectives = headerDirectives;
-    }
-    this.applyCustomizations();
+    return { channels: parsedChannels, headers };
   }
 
   private parseExtInfLine(line: string) {
-    // Extract comma and channel title at end
     const lastCommaIdx = line.lastIndexOf(',');
     let name = '';
     let attrsStr = line;
@@ -372,44 +479,106 @@ class PlaylistService {
   }
 
   private applyCustomizations() {
-    for (const channel of this.channels) {
-      const override = this.channelOverrides[channel.id] || this.channelOverrides[channel.tvgId];
-      if (override) {
-        if (override.customName !== undefined) channel.customName = override.customName;
-        if (override.customGroup !== undefined) channel.customGroup = override.customGroup;
-        if (override.customLogo !== undefined) channel.customLogo = override.customLogo;
-        if (override.customChno !== undefined) channel.customChno = override.customChno;
-        if (override.customUrl !== undefined) channel.customUrl = override.customUrl;
-        if (override.enabled !== undefined) channel.enabled = override.enabled;
-      }
+    for (const channels of Object.values(this.channelsBySource)) {
+      for (const channel of channels) {
+        const override = this.channelOverrides[channel.id] || this.channelOverrides[channel.tvgId];
+        if (override) {
+          if (override.customName !== undefined) channel.customName = override.customName;
+          if (override.customGroup !== undefined) channel.customGroup = override.customGroup;
+          if (override.customLogo !== undefined) channel.customLogo = override.customLogo;
+          if (override.customChno !== undefined) channel.customChno = override.customChno;
+          if (override.customUrl !== undefined) channel.customUrl = override.customUrl;
+          if (override.enabled !== undefined) channel.enabled = override.enabled;
+        }
 
-      // Check group renames
-      const effectiveGroup = channel.customGroup || channel.groupTitle;
-      if (this.groupRenames[effectiveGroup]) {
-        channel.customGroup = this.groupRenames[effectiveGroup];
-      }
+        const effectiveGroup = channel.customGroup || channel.groupTitle;
+        if (this.groupRenames[effectiveGroup]) {
+          channel.customGroup = this.groupRenames[effectiveGroup];
+        }
 
-      // Check group visibility
-      const finalGroup = channel.customGroup || channel.groupTitle;
-      if (this.groupVisibility[finalGroup] !== undefined && (override?.enabled === undefined)) {
-        channel.enabled = this.groupVisibility[finalGroup];
+        const finalGroup = channel.customGroup || channel.groupTitle;
+        if (this.groupVisibility[finalGroup] !== undefined && override?.enabled === undefined) {
+          channel.enabled = this.groupVisibility[finalGroup];
+        }
       }
     }
   }
 
-  public getAllChannels(): ChannelItem[] {
-    const combined = [...this.channels];
-    for (const custom of this.customChannels) {
-      if (!combined.some((c) => c.id === custom.id)) {
-        combined.push(custom);
-      }
-    }
-    return combined;
+  public getSources(): PlaylistSource[] {
+    return this.sources;
   }
 
-  public getGroups(): { name: string; count: number; enabledCount: number; isVisible: boolean }[] {
+  public addSource(source: { name: string; url: string; id?: string }) {
+    const id = source.id || `source_${Date.now()}`;
+    const newSource: PlaylistSource = {
+      id: id.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      name: source.name,
+      url: source.url,
+      enabled: true,
+      lastSyncTime: null,
+      status: 'idle',
+      errorMessage: null,
+      channelCount: 0,
+    };
+    this.sources.push(newSource);
+    this.saveCustomizations();
+    this.fetchSingleSource(newSource.id).catch((e) => console.error(e));
+    return newSource;
+  }
+
+  public updateSource(id: string, updates: Partial<PlaylistSource>) {
+    const src = this.sources.find((s) => s.id === id);
+    if (!src) return null;
+
+    const oldUrl = src.url;
+    Object.assign(src, updates);
+    this.saveCustomizations();
+
+    if (updates.url && updates.url !== oldUrl) {
+      this.fetchSingleSource(id).catch((e) => console.error(e));
+    }
+    return src;
+  }
+
+  public deleteSource(id: string) {
+    const idx = this.sources.findIndex((s) => s.id === id);
+    if (idx !== -1) {
+      this.sources.splice(idx, 1);
+      delete this.channelsBySource[id];
+      delete this.sourceHeaders[id];
+      this.saveCache();
+      this.saveCustomizations();
+      return true;
+    }
+    return false;
+  }
+
+  public getAllChannels(sourceId?: string): ChannelItem[] {
+    const result: ChannelItem[] = [];
+
+    if (sourceId && sourceId !== 'all') {
+      const srcChannels = this.channelsBySource[sourceId] || [];
+      result.push(...srcChannels);
+    } else {
+      for (const [sId, chs] of Object.entries(this.channelsBySource)) {
+        const src = this.sources.find((s) => s.id === sId);
+        if (src && src.enabled) {
+          result.push(...chs);
+        }
+      }
+      for (const custom of this.customChannels) {
+        if (!result.some((c) => c.id === custom.id)) {
+          result.push(custom);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  public getGroups(sourceId?: string): { name: string; count: number; enabledCount: number; isVisible: boolean }[] {
     const groupMap: Record<string, { total: number; enabled: number }> = {};
-    const all = this.getAllChannels();
+    const all = this.getAllChannels(sourceId);
 
     for (const ch of all) {
       const group = ch.customGroup || ch.groupTitle || 'General';
@@ -475,7 +644,7 @@ class PlaylistService {
   }
 
   public resetChannel(id: string) {
-    const channel = this.channels.find((c) => c.id === id);
+    const channel = this.getAllChannels().find((c) => c.id === id);
     if (channel) {
       delete this.channelOverrides[id];
       channel.customName = undefined;
@@ -484,13 +653,6 @@ class PlaylistService {
       channel.customChno = undefined;
       channel.customUrl = undefined;
       channel.enabled = true;
-      this.saveCustomizations();
-      return true;
-    }
-    // If it was a custom channel, remove it
-    const customIdx = this.customChannels.findIndex((c) => c.id === id);
-    if (customIdx !== -1) {
-      this.customChannels.splice(customIdx, 1);
       this.saveCustomizations();
       return true;
     }
@@ -509,6 +671,7 @@ class PlaylistService {
     const id = `custom_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
     const newChannel: ChannelItem = {
       id,
+      sourceId: 'custom',
       tvgId: channel.tvgId || id,
       tvgName: channel.name,
       tvgLogo: channel.logo || '',
@@ -582,7 +745,6 @@ class PlaylistService {
   public updateSettings(newSettings: Partial<PlaylistSettings>) {
     const oldInterval = this.settings.syncIntervalMinutes;
     const oldAutoSync = this.settings.autoSync;
-    const oldUrl = this.settings.upstreamUrl;
 
     this.settings = { ...this.settings, ...newSettings };
     this.saveCustomizations();
@@ -594,49 +756,54 @@ class PlaylistService {
       this.scheduleNextSync();
     }
 
-    if (newSettings.upstreamUrl && newSettings.upstreamUrl !== oldUrl) {
-      this.fetchUpstream().catch((e) => console.error('Fetch on URL change failed:', e));
-    }
-
     return this.settings;
   }
 
-  public getStatus(): SyncStatus {
+  public getGlobalStatus(): GlobalSyncStatus {
     const all = this.getAllChannels();
     const active = all.filter((c) => c.enabled);
     const groups = new Set(all.map((c) => c.customGroup || c.groupTitle));
 
+    const isAnyFetching = this.sources.some((s) => s.status === 'fetching') || this.isSyncingAll;
+    const hasAnyError = this.sources.some((s) => s.status === 'error');
+
     return {
       lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
       nextSyncTime: this.nextSyncTime ? this.nextSyncTime.toISOString() : null,
-      status: this.syncStatus,
-      errorMessage: this.errorMessage,
+      status: isAnyFetching ? 'fetching' : hasAnyError ? 'error' : 'success',
+      errorMessage: hasAnyError
+        ? this.sources.filter((s) => s.errorMessage).map((s) => `${s.name}: ${s.errorMessage}`).join('; ')
+        : null,
       totalChannels: all.length,
       activeChannels: active.length,
       totalGroups: groups.size,
-      upstreamUrl: this.settings.upstreamUrl,
       syncIntervalMinutes: this.settings.syncIntervalMinutes,
       autoSync: this.settings.autoSync,
+      publicBaseUrl: this.settings.publicBaseUrl || process.env.APP_URL || '',
+      sources: this.sources,
     };
   }
 
   /**
-   * Generates the compliant M3U text for IPTV players (OTT Navigator, TiviMate, etc.)
+   * Generates M3U playlist file for a specific source OR all sources combined
    */
-  public generateM3U(filterGroup?: string): string {
-    const channels = this.getAllChannels().filter((c) => c.enabled);
+  public generateM3U(sourceId?: string, filterGroup?: string): string {
+    const isAll = !sourceId || sourceId === 'all';
+    const channels = this.getAllChannels(isAll ? undefined : sourceId).filter((c) => c.enabled);
     const filtered = filterGroup
       ? channels.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
       : channels;
 
-    // Header line
+    // Collect header lines
     let header = '#EXTM3U';
-    if (this.headerDirectives.length > 0) {
-      // Use existing header if it has attributes like url-tvg, tvg-url
-      const firstLine = this.headerDirectives[0];
+    if (!isAll && this.sourceHeaders[sourceId]?.length > 0) {
+      const firstLine = this.sourceHeaders[sourceId][0];
       if (firstLine.startsWith('#EXTM3U')) {
         header = firstLine;
       }
+    } else {
+      // For combined, include comprehensive EPG attributes
+      header = '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz" refresh="3600"';
     }
 
     if (this.settings.customTvgUrl) {
@@ -644,13 +811,10 @@ class PlaylistService {
     }
 
     const lines: string[] = [header];
-    lines.push(`# Generated by IPTV Stream Relay & Playlist Studio | ${new Date().toISOString()}`);
+    const sourceLabel = isAll ? 'ALL COMBINED SOURCES' : (this.sources.find((s) => s.id === sourceId)?.name || sourceId);
+    lines.push(`# IPTV Stream Relay & Multi-Playlist Studio | ${new Date().toISOString()}`);
+    lines.push(`# Playlist Source: ${sourceLabel}`);
     lines.push(`# Total Channels: ${filtered.length}`);
-
-    // Add extra comment headers from original if any
-    for (let i = 1; i < this.headerDirectives.length; i++) {
-      lines.push(this.headerDirectives[i]);
-    }
 
     for (const ch of filtered) {
       const displayName = ch.customName || ch.name;
@@ -673,7 +837,7 @@ class PlaylistService {
 
       lines.push(`${extInfParts.join(' ')},${displayName}`);
 
-      // Append all Kodi/TiviMate/OTT props (#KODIPROP, #EXTVLCOPT, #EXTHTTP, # clearkeys)
+      // Forward all Kodi/VLC/ClearKey/EXTHTTP directives
       if (ch.directives && ch.directives.length > 0) {
         for (const dir of ch.directives) {
           lines.push(dir);
@@ -688,24 +852,30 @@ class PlaylistService {
   }
 
   /**
-   * Generates structured JSON representation of the playlist
+   * Generates structured JSON representation for a specific source OR all sources combined
    */
-  public generateJSON(filterGroup?: string) {
-    const all = this.getAllChannels();
+  public generateJSON(sourceId?: string, filterGroup?: string) {
+    const isAll = !sourceId || sourceId === 'all';
+    const all = this.getAllChannels(isAll ? undefined : sourceId);
     const channels = filterGroup
       ? all.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
       : all;
 
+    const sourceLabel = isAll ? 'All Combined Playlists' : (this.sources.find((s) => s.id === sourceId)?.name || sourceId);
+
     return {
-      service: 'IPTV Stream Relay & Playlist Studio',
+      service: 'IPTV Stream Relay & Multi-Playlist Studio',
+      playlistSource: sourceLabel,
+      sourceId: isAll ? 'all' : sourceId,
       generatedAt: new Date().toISOString(),
       lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
-      upstreamUrl: this.settings.upstreamUrl,
       totalChannels: channels.length,
       activeChannels: channels.filter((c) => c.enabled).length,
-      groups: this.getGroups(),
+      sources: isAll ? this.sources : this.sources.filter((s) => s.id === sourceId),
+      groups: this.getGroups(isAll ? undefined : sourceId),
       channels: channels.map((c) => ({
         id: c.id,
+        sourceId: c.sourceId,
         tvgId: c.tvgId,
         tvgName: c.customName || c.tvgName,
         displayName: c.customName || c.name,
@@ -727,6 +897,7 @@ class PlaylistService {
 
   public exportBackup(): CustomizationData {
     return {
+      sources: this.sources,
       channelOverrides: this.channelOverrides,
       groupRenames: this.groupRenames,
       groupVisibility: this.groupVisibility,
@@ -736,6 +907,7 @@ class PlaylistService {
   }
 
   public importBackup(backup: Partial<CustomizationData>): boolean {
+    if (backup.sources) this.sources = backup.sources;
     if (backup.channelOverrides) this.channelOverrides = backup.channelOverrides;
     if (backup.groupRenames) this.groupRenames = backup.groupRenames;
     if (backup.groupVisibility) this.groupVisibility = backup.groupVisibility;

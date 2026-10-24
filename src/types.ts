@@ -1,5 +1,17 @@
+export interface PlaylistSource {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  lastSyncTime: string | null;
+  status: 'idle' | 'fetching' | 'success' | 'error';
+  errorMessage: string | null;
+  channelCount: number;
+}
+
 export interface ChannelItem {
   id: string;
+  sourceId: string;
   tvgId: string;
   tvgName: string;
   tvgLogo: string;
@@ -37,16 +49,16 @@ export interface SyncStatus {
   totalChannels: number;
   activeChannels: number;
   totalGroups: number;
-  upstreamUrl: string;
   syncIntervalMinutes: number;
   autoSync: boolean;
+  publicBaseUrl?: string;
+  sources: PlaylistSource[];
 }
 
 export interface PlaylistSettings {
-  upstreamUrl: string;
   syncIntervalMinutes: number;
   autoSync: boolean;
   userAgent: string;
-  removeGroupPrefix: string;
   customTvgUrl: string;
+  publicBaseUrl: string;
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Save, Clock, Download, Upload, Shield, RefreshCw, AlertTriangle, Check } from 'lucide-react';
+import { X, Save, Clock, Download, Upload, Globe, Check } from 'lucide-react';
 import { PlaylistSettings } from '../types';
 
 interface SettingsModalProps {
@@ -17,11 +17,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onExportBackup,
   onImportBackup,
 }) => {
-  const [upstreamUrl, setUpstreamUrl] = useState(settings.upstreamUrl);
   const [interval, setIntervalVal] = useState(settings.syncIntervalMinutes);
   const [autoSync, setAutoSync] = useState(settings.autoSync);
   const [userAgent, setUserAgent] = useState(settings.userAgent);
   const [customTvgUrl, setCustomTvgUrl] = useState(settings.customTvgUrl);
+  const [publicBaseUrl, setPublicBaseUrl] = useState(settings.publicBaseUrl || '');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -31,11 +31,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setIsSaving(true);
     try {
       await onSave({
-        upstreamUrl: upstreamUrl.trim(),
         syncIntervalMinutes: Number(interval),
         autoSync,
         userAgent: userAgent.trim(),
         customTvgUrl: customTvgUrl.trim(),
+        publicBaseUrl: publicBaseUrl.trim(),
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -75,10 +75,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Clock className="w-4 h-4 text-cyan-400" />
-              <span>Sync Settings &amp; Upstream Configuration</span>
+              <span>Global Settings &amp; VPS Configuration</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Control the 30-minute auto-fetcher and backup channel overrides
+              Sync intervals, custom domain for VPS, and backup management
             </p>
           </div>
           <button
@@ -91,21 +91,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 text-xs">
-          {/* Upstream URL */}
+          {/* Public Base URL (for Contabo VPS / Custom Domain) */}
           <div>
-            <label className="block text-slate-300 font-semibold mb-1">
-              Upstream Playlist URL
+            <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <span>VPS Public IP or Custom Domain URL (optional)</span>
             </label>
             <input
-              type="url"
-              value={upstreamUrl}
-              onChange={(e) => setUpstreamUrl(e.target.value)}
+              type="text"
+              value={publicBaseUrl}
+              onChange={(e) => setPublicBaseUrl(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-500"
-              placeholder="https://plugxvipplaylist.lovable.app/api/playlist"
-              required
+              placeholder="e.g. http://194.163.xxx.xxx:3000 or https://iptv.mydomain.com"
             />
             <p className="text-[11px] text-slate-400 mt-1">
-              The service polls this URL to grab fresh tokens, clearkeys, and live channels.
+              If hosting on a Contabo VPS with a fixed IP or domain, enter it here to generate exact absolute URLs. If left empty, it auto-detects from the browser.
             </p>
           </div>
 
@@ -142,7 +142,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 }`}
               >
                 <span className={`w-2 h-2 rounded-full ${autoSync ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                <span>{autoSync ? 'Auto-Sync Active' : 'Disabled (Manual Only)'}</span>
+                <span>{autoSync ? 'Auto-Sync Active (30m)' : 'Disabled (Manual Only)'}</span>
               </button>
             </div>
           </div>
@@ -160,7 +160,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               placeholder="e.g. https://avkb.short.gy/jioepg.xml.gz"
             />
             <p className="text-[11px] text-slate-400 mt-1">
-              Leave blank to keep the original EPG header from the upstream playlist.
+              Leave blank to keep original EPG tags from upstream playlists.
             </p>
           </div>
 
@@ -182,7 +182,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="pt-4 border-t border-slate-800">
             <h4 className="font-bold text-white text-xs mb-1">Backup &amp; Migration</h4>
             <p className="text-[11px] text-slate-400 mb-3">
-              Export your custom channel names, reordered groups, and visibility rules as a JSON file.
+              Export all playlists, channel names, group changes, and settings as a portable JSON backup.
             </p>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -192,7 +192,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Export Overrides Backup</span>
+                <span>Export JSON Backup</span>
               </button>
 
               <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors cursor-pointer">

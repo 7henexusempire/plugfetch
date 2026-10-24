@@ -4,11 +4,8 @@ import {
   Layers,
   FileCode,
   Settings,
-  HelpCircle,
   Sparkles,
-  Radio,
   CheckCircle,
-  AlertCircle,
 } from 'lucide-react';
 import { Header } from './components/Header';
 import { QuickConnect } from './components/QuickConnect';
@@ -19,10 +16,13 @@ import { ChannelModal } from './components/ChannelModal';
 import { AddChannelModal } from './components/AddChannelModal';
 import { StreamPlayerModal } from './components/StreamPlayerModal';
 import { SettingsModal } from './components/SettingsModal';
-import { ChannelItem, GroupInfo, SyncStatus, PlaylistSettings } from './types';
+import { PlaylistSourcesModal } from './components/PlaylistSourcesModal';
+import { ChannelItem, GroupInfo, SyncStatus, PlaylistSettings, PlaylistSource } from './types';
 
 export default function App() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
+  const [sources, setSources] = useState<PlaylistSource[]>([]);
+  const [selectedSource, setSelectedSource] = useState<string>('all');
   const [groups, setGroups] = useState<GroupInfo[]>([]);
   const [channels, setChannels] = useState<ChannelItem[]>([]);
   const [totalChannels, setTotalChannels] = useState<number>(0);
@@ -44,13 +44,14 @@ export default function App() {
   const [isAddChannelOpen, setIsAddChannelOpen] = useState<boolean>(false);
   const [previewingChannel, setPreviewingChannel] = useState<ChannelItem | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [isSourcesOpen, setIsSourcesOpen] = useState<boolean>(false);
+
   const [settings, setSettings] = useState<PlaylistSettings>({
-    upstreamUrl: 'https://plugxvipplaylist.lovable.app/api/playlist',
     syncIntervalMinutes: 30,
     autoSync: true,
     userAgent: '',
-    removeGroupPrefix: '',
     customTvgUrl: '',
+    publicBaseUrl: '',
   });
 
   const showToast = (msg: string) => {
@@ -64,15 +65,32 @@ export default function App() {
       if (res.ok) {
         const data: SyncStatus = await res.json();
         setStatus(data);
+        if (data.sources) {
+          setSources(data.sources);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch status:', err);
     }
   }, []);
 
-  const fetchGroups = useCallback(async () => {
+  const fetchSources = useCallback(async () => {
     try {
-      const res = await fetch('/api/groups');
+      const res = await fetch('/api/sources');
+      if (res.ok) {
+        const data: PlaylistSource[] = await res.json();
+        setSources(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch sources:', err);
+    }
+  }, []);
+
+  const fetchGroups = useCallback(async (sourceId = selectedSource) => {
+    try {
+      const params = new URLSearchParams();
+      if (sourceId !== 'all') params.set('sourceId', sourceId);
+      const res = await fetch(`/api/groups?${params.toString()}`);
       if (res.ok) {
         const data: GroupInfo[] = await res.json();
         setGroups(data);
@@ -80,7 +98,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to fetch groups:', err);
     }
-  }, []);
+  }, [selectedSource]);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -95,12 +113,19 @@ export default function App() {
   }, []);
 
   const fetchChannels = useCallback(
-    async (page = 1, search = searchQuery, group = selectedGroup, stat = statusFilter) => {
+    async (
+      page = 1,
+      sourceId = selectedSource,
+      search = searchQuery,
+      group = selectedGroup,
+      stat = statusFilter
+    ) => {
       setIsLoadingChannels(true);
       try {
         const params = new URLSearchParams({
           page: page.toString(),
           limit: pageSize.toString(),
+          sourceId,
           search,
           group,
           status: stat,
@@ -119,61 +144,137 @@ export default function App() {
         setIsLoadingChannels(false);
       }
     },
-    [searchQuery, selectedGroup, statusFilter, pageSize]
+    [selectedSource, searchQuery, selectedGroup, statusFilter, pageSize]
   );
 
   // Initial load
   useEffect(() => {
     fetchStatus();
-    fetchGroups();
+    fetchSources();
+    fetchGroups('all');
     fetchSettings();
-    fetchChannels(1);
+    fetchChannels(1, 'all');
 
-    // Refresh status & countdown every 10 seconds
     const interval = setInterval(() => {
       fetchStatus();
     }, 10000);
     return () => clearInterval(interval);
-  }, [fetchStatus, fetchGroups, fetchSettings, fetchChannels]);
+  }, [fetchStatus, fetchSources, fetchGroups, fetchSettings, fetchChannels]);
 
   // Handle Search & Filter changes
   const handleSearchChange = (q: string) => {
     setSearchQuery(q);
-    fetchChannels(1, q, selectedGroup, statusFilter);
+    fetchChannels(1, selectedSource, q, selectedGroup, statusFilter);
+  };
+
+  const handleSourceChange = (srcId: string) => {
+    setSelectedSource(srcId);
+    setSelectedGroup('all');
+    fetchGroups(srcId);
+    fetchChannels(1, srcId, searchQuery, 'all', statusFilter);
   };
 
   const handleGroupChange = (g: string) => {
     setSelectedGroup(g);
-    fetchChannels(1, searchQuery, g, statusFilter);
+    fetchChannels(1, selectedSource, searchQuery, g, statusFilter);
   };
 
   const handleStatusChange = (s: string) => {
     setStatusFilter(s);
-    fetchChannels(1, searchQuery, selectedGroup, s);
+    fetchChannels(1, selectedSource, searchQuery, selectedGroup, s);
   };
 
   const handlePageChange = (p: number) => {
-    fetchChannels(p, searchQuery, selectedGroup, statusFilter);
+    fetchChannels(p, selectedSource, searchQuery, selectedGroup, statusFilter);
   };
 
-  // Sync upstream immediately
+  // Sync actions
   const handleSyncNow = async () => {
     setIsSyncing(true);
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || 'Synced successfully!');
+        showToast(data.message || 'Synced all sources successfully!');
       } else {
-        showToast(`Sync failed: ${data.message}`);
+        showToast(`Sync alert: ${data.message}`);
       }
       await fetchStatus();
-      await fetchGroups();
-      await fetchChannels(currentPage);
+      await fetchSources();
+      await fetchGroups(selectedSource);
+      await fetchChannels(currentPage, selectedSource);
     } catch (err: any) {
       showToast(`Error: ${err.message}`);
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleSyncSource = async (sourceId?: string) => {
+    try {
+      const url = sourceId ? `/api/sync?sourceId=${encodeURIComponent(sourceId)}` : '/api/sync';
+      const res = await fetch(url, { method: 'POST' });
+      const data = await res.json();
+      showToast(data.message || 'Source synced');
+      await fetchStatus();
+      await fetchSources();
+      await fetchChannels(currentPage, selectedSource);
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`);
+    }
+  };
+
+  // Source CRUD
+  const handleAddSource = async (source: { name: string; url: string; id?: string }) => {
+    try {
+      const res = await fetch('/api/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(source),
+      });
+      if (res.ok) {
+        showToast(`Added playlist "${source.name}"`);
+        await fetchSources();
+        await fetchStatus();
+        await fetchChannels(1, selectedSource);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateSource = async (id: string, updates: Partial<PlaylistSource>) => {
+    try {
+      const res = await fetch(`/api/sources/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        showToast('Playlist source updated');
+        await fetchSources();
+        await fetchStatus();
+        await fetchChannels(currentPage, selectedSource);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteSource = async (id: string) => {
+    try {
+      const res = await fetch(`/api/sources/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast('Playlist source removed');
+        if (selectedSource === id) {
+          setSelectedSource('all');
+        }
+        await fetchSources();
+        await fetchStatus();
+        await fetchChannels(1, 'all');
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -190,7 +291,7 @@ export default function App() {
           prev.map((c) => (c.id === id ? { ...c, enabled: !currentEnabled } : c))
         );
         fetchStatus();
-        fetchGroups();
+        fetchGroups(selectedSource);
       }
     } catch (err) {
       console.error(err);
@@ -206,8 +307,8 @@ export default function App() {
       });
       if (res.ok) {
         showToast('Channel updated successfully!');
-        fetchChannels(currentPage);
-        fetchGroups();
+        fetchChannels(currentPage, selectedSource);
+        fetchGroups(selectedSource);
       }
     } catch (err) {
       console.error(err);
@@ -219,8 +320,8 @@ export default function App() {
       const res = await fetch(`/api/channels/reset/${id}`, { method: 'POST' });
       if (res.ok) {
         showToast('Reset channel to upstream default!');
-        fetchChannels(currentPage);
-        fetchGroups();
+        fetchChannels(currentPage, selectedSource);
+        fetchGroups(selectedSource);
       }
     } catch (err) {
       console.error(err);
@@ -235,9 +336,9 @@ export default function App() {
         body: JSON.stringify(newChannel),
       });
       if (res.ok) {
-        showToast('Channel added successfully!');
-        fetchChannels(1);
-        fetchGroups();
+        showToast('Custom channel added!');
+        fetchChannels(1, selectedSource);
+        fetchGroups(selectedSource);
         fetchStatus();
       }
     } catch (err) {
@@ -255,8 +356,8 @@ export default function App() {
       });
       if (res.ok) {
         showToast(`Renamed group to "${newName}"`);
-        fetchGroups();
-        fetchChannels(currentPage);
+        fetchGroups(selectedSource);
+        fetchChannels(currentPage, selectedSource);
       }
     } catch (err) {
       console.error(err);
@@ -271,9 +372,9 @@ export default function App() {
         body: JSON.stringify({ groupName, visible }),
       });
       if (res.ok) {
-        showToast(`${visible ? 'Enabled' : 'Hidden'} all channels in "${groupName}"`);
-        fetchGroups();
-        fetchChannels(currentPage);
+        showToast(`${visible ? 'Enabled' : 'Hidden'} channels in "${groupName}"`);
+        fetchGroups(selectedSource);
+        fetchChannels(currentPage, selectedSource);
         fetchStatus();
       }
     } catch (err) {
@@ -290,8 +391,8 @@ export default function App() {
       });
       const data = await res.json();
       if (data.success) {
-        fetchGroups();
-        fetchChannels(currentPage);
+        fetchGroups(selectedSource);
+        fetchChannels(currentPage, selectedSource);
         return data.updatedCount || 0;
       }
     } catch (err) {
@@ -335,8 +436,9 @@ export default function App() {
     }
     showToast('Backup restored successfully!');
     fetchStatus();
-    fetchGroups();
-    fetchChannels(1);
+    fetchSources();
+    fetchGroups(selectedSource);
+    fetchChannels(1, selectedSource);
   };
 
   return (
@@ -355,6 +457,7 @@ export default function App() {
         isSyncing={isSyncing}
         onSync={handleSyncNow}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSources={() => setIsSourcesOpen(true)}
       />
 
       {/* Main Container */}
@@ -364,6 +467,8 @@ export default function App() {
           totalChannels={status?.totalChannels || 0}
           activeChannels={status?.activeChannels || 0}
           totalGroups={status?.totalGroups || 0}
+          sources={sources}
+          publicBaseUrl={settings.publicBaseUrl}
         />
 
         {/* Tab Navigation */}
@@ -378,7 +483,7 @@ export default function App() {
               }`}
             >
               <Tv className="w-4 h-4" />
-              <span>Channels &amp; Streams ({status?.totalChannels || 0})</span>
+              <span>Channels ({status?.totalChannels || 0})</span>
             </button>
 
             <button
@@ -390,7 +495,7 @@ export default function App() {
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Groups &amp; Categories ({groups.length})</span>
+              <span>Categories ({groups.length})</span>
             </button>
 
             <button
@@ -406,13 +511,23 @@ export default function App() {
             </button>
           </div>
 
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-          >
-            <Settings className="w-4 h-4 text-slate-400" />
-            <span>Settings &amp; Schedule</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsSourcesOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-cyan-800/60 hover:border-cyan-600 text-cyan-300 text-xs font-medium transition-colors"
+            >
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <span>Manage Playlists ({sources.length})</span>
+            </button>
+
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
+            >
+              <Settings className="w-4 h-4 text-slate-400" />
+              <span>Settings</span>
+            </button>
+          </div>
         </div>
 
         {/* Tab Content */}
@@ -420,6 +535,8 @@ export default function App() {
           <ChannelList
             channels={channels}
             groups={groups}
+            sources={sources}
+            selectedSource={selectedSource}
             totalChannels={totalChannels}
             currentPage={currentPage}
             totalPages={totalPages}
@@ -429,6 +546,7 @@ export default function App() {
             statusFilter={statusFilter}
             isLoading={isLoadingChannels}
             onSearchChange={handleSearchChange}
+            onSourceChange={handleSourceChange}
             onGroupChange={handleGroupChange}
             onStatusChange={handleStatusChange}
             onPageChange={handlePageChange}
@@ -449,19 +567,19 @@ export default function App() {
             onFilterByGroup={(groupName) => {
               setSelectedGroup(groupName);
               setActiveTab('channels');
-              fetchChannels(1, searchQuery, groupName, statusFilter);
+              fetchChannels(1, selectedSource, searchQuery, groupName, statusFilter);
             }}
           />
         )}
 
-        {activeTab === 'raw' && <RawInspector />}
+        {activeTab === 'raw' && <RawInspector sources={sources} />}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-400">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>
-            IPTV Stream Relay &amp; Playlist Studio · Auto-fetching upstream every {status?.syncIntervalMinutes || 30} minutes
+            IPTV Multi-Playlist Relay Studio · Auto-refreshing all sources every {status?.syncIntervalMinutes || 30} minutes
           </p>
           <p className="text-slate-400">
             Engineered for <span className="text-slate-300">OTT Navigator</span>, <span className="text-slate-300">TiviMate</span> &amp; <span className="text-slate-300">Kodi</span>
@@ -502,6 +620,17 @@ export default function App() {
           onSave={handleSaveSettings}
           onExportBackup={handleExportBackup}
           onImportBackup={handleImportBackup}
+        />
+      )}
+
+      {isSourcesOpen && (
+        <PlaylistSourcesModal
+          sources={sources}
+          onClose={() => setIsSourcesOpen(false)}
+          onAddSource={handleAddSource}
+          onUpdateSource={handleUpdateSource}
+          onDeleteSource={handleDeleteSource}
+          onSyncSource={handleSyncSource}
         />
       )}
     </div>

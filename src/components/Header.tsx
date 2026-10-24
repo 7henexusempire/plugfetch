@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Radio, CheckCircle2, AlertCircle, Clock, ExternalLink } from 'lucide-react';
+import { RefreshCw, Radio, CheckCircle2, AlertCircle, Clock, Layers } from 'lucide-react';
 import { SyncStatus } from '../types';
 
 interface HeaderProps {
@@ -7,6 +7,7 @@ interface HeaderProps {
   isSyncing: boolean;
   onSync: () => Promise<void>;
   onOpenSettings: () => void;
+  onOpenSources: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -14,6 +15,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSyncing,
   onSync,
   onOpenSettings,
+  onOpenSources,
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
 
@@ -52,6 +54,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const sourcesCount = status?.sources?.length || 0;
+
   return (
     <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -66,15 +70,15 @@ export const Header: React.FC<HeaderProps> = ({
                 IPTV Relay Studio
               </h1>
               <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-1.5 py-0.5 rounded">
-                Live Fetcher
+                Multi-Playlist
               </span>
             </div>
             <p className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-              <span>Upstream: plugxvipplaylist</span>
+              <span>{sourcesCount} Active Playlists</span>
               <span>·</span>
               <span className="text-emerald-400 flex items-center gap-1 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-                Active Sync (Every {status?.syncIntervalMinutes || 30}m)
+                Auto-Sync (Every {status?.syncIntervalMinutes || 30}m)
               </span>
             </p>
           </div>
@@ -100,16 +104,25 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
+          {/* Manage Sources button */}
+          <button
+            onClick={onOpenSources}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Playlists ({sourcesCount})</span>
+          </button>
+
           {/* Sync status badge */}
           {status?.status === 'error' ? (
             <div className="flex items-center gap-1.5 text-xs text-rose-400 bg-rose-950/50 border border-rose-800 px-2.5 py-1.5 rounded-lg" title={status.errorMessage || 'Error'}>
               <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate max-w-[140px]">Sync failed</span>
+              <span className="truncate max-w-[140px]">Sync warning</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-950/50 border border-emerald-800/60 px-2.5 py-1.5 rounded-lg">
               <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-              <span>{status?.activeChannels || 0} / {status?.totalChannels || 0} Online</span>
+              <span>{status?.activeChannels || 0} Channels</span>
             </div>
           )}
 
@@ -124,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Fetching...' : 'Sync Now'}</span>
+            <span>{isSyncing ? 'Fetching...' : 'Sync All'}</span>
           </button>
         </div>
       </div>

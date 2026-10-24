@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  iptv-relay:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: iptv-stream-relay
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DATA_DIR=/app/data
+    volumes:
+      # Persistent volume on host VPS so your channel customizations & cache survive container restarts
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

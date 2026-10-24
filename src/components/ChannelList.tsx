@@ -16,11 +16,13 @@ import {
   ChevronRight,
   Sparkles,
 } from 'lucide-react';
-import { ChannelItem, GroupInfo } from '../types';
+import { ChannelItem, GroupInfo, PlaylistSource } from '../types';
 
 interface ChannelListProps {
   channels: ChannelItem[];
   groups: GroupInfo[];
+  sources: PlaylistSource[];
+  selectedSource: string;
   totalChannels: number;
   currentPage: number;
   totalPages: number;
@@ -30,6 +32,7 @@ interface ChannelListProps {
   statusFilter: string;
   isLoading: boolean;
   onSearchChange: (q: string) => void;
+  onSourceChange: (s: string) => void;
   onGroupChange: (g: string) => void;
   onStatusChange: (s: string) => void;
   onPageChange: (p: number) => void;
@@ -43,6 +46,27 @@ interface ChannelListProps {
 export const ChannelList: React.FC<ChannelListProps> = ({
   channels,
   groups,
+  sources,
+  selectedSource,
+  totalChannels,
+  currentPage,
+  totalPages,
+  pageSize,
+  searchQuery,
+  selectedGroup,
+  statusFilter,
+  isLoading,
+  onSearchChange,
+  onSourceChange,
+  onGroupChange,
+  onStatusChange,
+  onPageChange,
+  onToggleChannel,
+  onEditChannel,
+  onResetChannel,
+  onAddChannel,
+  onPreviewChannel,
+}) => {
   totalChannels,
   currentPage,
   totalPages,
@@ -93,6 +117,23 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
         {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Playlist Source Filter */}
+          <div className="flex items-center gap-1.5 bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-1.5 text-xs">
+            <Tv className="w-3.5 h-3.5 text-cyan-400" />
+            <select
+              value={selectedSource}
+              onChange={(e) => onSourceChange(e.target.value)}
+              className="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer max-w-[170px] truncate"
+            >
+              <option value="all" className="bg-slate-900 text-slate-200">All Sources Combined</option>
+              {sources.map((src) => (
+                <option key={src.id} value={src.id} className="bg-slate-900 text-slate-200">
+                  {src.name} ({src.channelCount})
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Group Filter */}
           <div className="flex items-center gap-1.5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
@@ -252,6 +293,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           <span className="text-[10px] text-amber-400 bg-amber-950/50 border border-amber-800/80 px-1.5 py-0.2 rounded flex items-center gap-1" title="Has custom edits">
                             <Sparkles className="w-2.5 h-2.5" />
                             Customized
+                          </span>
+                        )}
+                        {channel.sourceId && (
+                          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-800/70 px-1.5 py-0.5 rounded">
+                            {channel.sourceId}
                           </span>
                         )}
                         {channel.isCustom && (
