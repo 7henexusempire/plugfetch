@@ -22,12 +22,15 @@ export interface ChannelItem {
   tvgChno?: string;
   name: string;
   url: string;
-  directives: string[];
+  preDirectives: string[]; // Directives before #EXTINF (e.g. SunNXT ClearKeys #KODIPROP)
+  postDirectives: string[]; // Directives between #EXTINF and URL (#EXTVLCOPT, #EXTHTTP, cookies, hmac)
+  directives: string[]; // Combined list for backward compatibility
   hasClearKey?: boolean;
   clearKeySnippet?: string;
   customName?: string;
   customGroup?: string;
   customLogo?: string;
+  customGroupLogo?: string;
   customChno?: string;
   customUrl?: string;
   enabled: boolean;
@@ -39,6 +42,7 @@ export interface GroupInfo {
   count: number;
   enabledCount: number;
   isVisible: boolean;
+  logo?: string;
 }
 
 export interface SyncStatus {
@@ -61,4 +65,6 @@ export interface PlaylistSettings {
   userAgent: string;
   customTvgUrl: string;
   publicBaseUrl: string;
+  zeotvStripSuffix: boolean;
+  zeotvRemoveGroupLogo: boolean;
 }

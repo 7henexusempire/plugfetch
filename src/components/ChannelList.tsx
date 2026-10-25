@@ -299,13 +299,25 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
                     {/* Group / Category */}
                     <td className="py-3 px-4">
-                      <button
-                        onClick={() => onGroupChange(displayGroup)}
-                        className="text-left font-medium text-slate-300 hover:text-cyan-400 transition-colors"
-                        title="Filter by this group"
-                      >
-                        {displayGroup}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {(channel.customGroupLogo || channel.groupLogo) && (
+                          <div className="w-5 h-5 rounded bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                            <img
+                              src={channel.customGroupLogo || channel.groupLogo}
+                              alt=""
+                              className="w-full h-full object-contain p-0.5"
+                              onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
+                            />
+                          </div>
+                        )}
+                        <button
+                          onClick={() => onGroupChange(displayGroup)}
+                          className="text-left font-medium text-slate-300 hover:text-cyan-400 transition-colors"
+                          title="Filter by this group"
+                        >
+                          {displayGroup}
+                        </button>
+                      </div>
                       {channel.customGroup && channel.customGroup !== channel.groupTitle && (
                         <div className="text-[10px] text-slate-500 truncate max-w-[140px]">
                           Orig: {channel.groupTitle}

@@ -52,6 +52,8 @@ export default function App() {
     userAgent: '',
     customTvgUrl: '',
     publicBaseUrl: '',
+    zeotvStripSuffix: true,
+    zeotvRemoveGroupLogo: true,
   });
 
   const showToast = (msg: string) => {
@@ -401,6 +403,23 @@ export default function App() {
     return 0;
   };
 
+  const handleBulkSetGroupLogo = async (groupNames: string[], logoUrl: string) => {
+    try {
+      const res = await fetch('/api/groups/bulk-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupNames, logoUrl }),
+      });
+      if (res.ok) {
+        showToast(logoUrl ? `Updated logo for ${groupNames.length} categories!` : `Cleared logo for ${groupNames.length} categories!`);
+        fetchGroups(selectedSource);
+        fetchChannels(currentPage, selectedSource);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Settings & Backup Actions
   const handleSaveSettings = async (newSettings: Partial<PlaylistSettings>) => {
     try {
@@ -564,6 +583,7 @@ export default function App() {
             onRenameGroup={handleRenameGroup}
             onToggleGroup={handleToggleGroup}
             onRemovePrefix={handleRemovePrefix}
+            onBulkSetGroupLogo={handleBulkSetGroupLogo}
             onFilterByGroup={(groupName) => {
               setSelectedGroup(groupName);
               setActiveTab('channels');

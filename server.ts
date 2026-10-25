@@ -283,6 +283,19 @@ app.post('/api/groups/toggle', (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/groups/bulk-logo', (req: Request, res: Response) => {
+  try {
+    const { groupNames, logoUrl } = req.body;
+    if (!Array.isArray(groupNames) || groupNames.length === 0) {
+      return res.status(400).json({ error: 'groupNames array is required' });
+    }
+    const count = playlistService.setBulkGroupLogo(groupNames, logoUrl || '');
+    return res.json({ success: true, updatedChannels: count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/groups/remove-prefix', (req: Request, res: Response) => {
   try {
     const { prefix } = req.body;

@@ -22,6 +22,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [userAgent, setUserAgent] = useState(settings.userAgent);
   const [customTvgUrl, setCustomTvgUrl] = useState(settings.customTvgUrl);
   const [publicBaseUrl, setPublicBaseUrl] = useState(settings.publicBaseUrl || '');
+  const [zeotvStripSuffix, setZeotvStripSuffix] = useState(settings.zeotvStripSuffix !== false);
+  const [zeotvRemoveGroupLogo, setZeotvRemoveGroupLogo] = useState(settings.zeotvRemoveGroupLogo !== false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -36,6 +38,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         userAgent: userAgent.trim(),
         customTvgUrl: customTvgUrl.trim(),
         publicBaseUrl: publicBaseUrl.trim(),
+        zeotvStripSuffix,
+        zeotvRemoveGroupLogo,
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -162,6 +166,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-[11px] text-slate-400 mt-1">
               Leave blank to keep original EPG tags from upstream playlists.
             </p>
+          </div>
+
+          {/* ZeoTV Formatting Rules */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-2.5">
+            <h4 className="font-semibold text-slate-200 text-xs">ZeoTV Playlist Formatting Rules</h4>
+            <label className="flex items-center gap-2 text-slate-300 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={zeotvStripSuffix}
+                onChange={(e) => setZeotvStripSuffix(e.target.checked)}
+                className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-0"
+              />
+              <span>Remove <code>| STREAMX</code> suffix from category names (e.g. <em>JioHotstar | STREAMX &rarr; JioHotstar</em>)</span>
+            </label>
+
+            <label className="flex items-center gap-2 text-slate-300 cursor-pointer text-xs">
+              <input
+                type="checkbox"
+                checked={zeotvRemoveGroupLogo}
+                onChange={(e) => setZeotvRemoveGroupLogo(e.target.checked)}
+                className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-0"
+              />
+              <span>Remove default group logos from ZeoTV categories</span>
+            </label>
           </div>
 
           {/* User Agent */}

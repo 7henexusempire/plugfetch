@@ -1,5 +1,20 @@
 import React, { useState } from 'react';
-import { Layers, Edit2, Eye, EyeOff, Scissors, Check, Sparkles, Folder } from 'lucide-react';
+import {
+  Layers,
+  Edit2,
+  Eye,
+  EyeOff,
+  Scissors,
+  Check,
+  Sparkles,
+  Folder,
+  Image,
+  Search,
+  CheckSquare,
+  Square,
+  Trash2,
+  ExternalLink,
+} from 'lucide-react';
 import { GroupInfo } from '../types';
 
 interface GroupManagerProps {
@@ -8,6 +23,7 @@ interface GroupManagerProps {
   onToggleGroup: (groupName: string, visible: boolean) => Promise<void>;
   onRemovePrefix: (prefix: string) => Promise<number>;
   onFilterByGroup: (groupName: string) => void;
+  onBulkSetGroupLogo: (groupNames: string[], logoUrl: string) => Promise<void>;
 }
 
 export const GroupManager: React.FC<GroupManagerProps> = ({
@@ -16,12 +32,58 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
   onToggleGroup,
   onRemovePrefix,
   onFilterByGroup,
+  onBulkSetGroupLogo,
 }) => {
+  const [search, setSearch] = useState('');
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [bulkLogoUrl, setBulkLogoUrl] = useState('');
+  const [isBulkApplying, setIsBulkApplying] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+
   const [editingGroup, setEditingGroup] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+
+  const [editingLogoGroup, setEditingLogoGroup] = useState<string | null>(null);
+  const [singleLogoUrl, setSingleLogoUrl] = useState('');
+
   const [prefixToStrip, setPrefixToStrip] = useState('Jio TV+ | ');
   const [stripStatus, setStripStatus] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const filteredGroups = groups.filter((g) =>
+    g.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleSelectAll = () => {
+    if (selectedGroups.length === filteredGroups.length) {
+      setSelectedGroups([]);
+    } else {
+      setSelectedGroups(filteredGroups.map((g) => g.name));
+    }
+  };
+
+  const handleToggleSelect = (name: string) => {
+    setSelectedGroups((prev) =>
+      prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name]
+    );
+  };
+
+  const handleApplyBulkLogo = async (clear = false) => {
+    if (selectedGroups.length === 0) return;
+    const urlToApply = clear ? '' : bulkLogoUrl.trim();
+    if (!clear && !urlToApply) return;
+
+    setIsBulkApplying(true);
+    try {
+      await onBulkSetGroupLogo(selectedGroups, urlToApply);
+      setBulkMessage(clear ? `Cleared logo for ${selectedGroups.length} categories` : `Applied logo to ${selectedGroups.length} categories!`);
+      if (clear) setBulkLogoUrl('');
+      setSelectedGroups([]);
+      setTimeout(() => setBulkMessage(null), 3500);
+    } finally {
+      setIsBulkApplying(false);
+    }
+  };
 
   const handleStartRename = (name: string) => {
     setEditingGroup(name);
@@ -42,6 +104,21 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
     }
   };
 
+  const handleStartSingleLogo = (g: GroupInfo) => {
+    setEditingLogoGroup(g.name);
+    setSingleLogoUrl(g.logo || '');
+  };
+
+  const handleSaveSingleLogo = async (groupName: string) => {
+    setIsProcessing(true);
+    try {
+      await onBulkSetGroupLogo([groupName], singleLogoUrl.trim());
+      setEditingLogoGroup(null);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleStripPrefix = async () => {
     if (!prefixToStrip) return;
     setIsProcessing(true);
@@ -56,158 +133,323 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn">
-      {/* Quick Bulk Tools Banner */}
+      {/* 1. BULK GROUP LOGO & TOOLS PANEL */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Scissors className="w-4 h-4 text-cyan-400" />
-              <h3 className="font-bold text-white text-sm">Batch Group Cleaner / Prefix Stripper</h3>
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+            Bulk Category Logo &amp; Organization Tools
+          </h3>
+        </div>
+        <p className="text-xs text-slate-400 mb-4">
+          Select multiple categories below, then paste a logo URL to update all their channels at once.
+        </p>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Bulk Logo Form */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Image className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Bulk Set Group Logo</span>
+                </span>
+                <span className="text-[11px] font-mono text-cyan-400">
+                  {selectedGroups.length} categories selected
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="url"
+                  value={bulkLogoUrl}
+                  onChange={(e) => setBulkLogoUrl(e.target.value)}
+                  placeholder="https://.../category-icon.png"
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+                />
+                {bulkLogoUrl && (
+                  <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                    <img
+                      src={bulkLogoUrl}
+                      alt="preview"
+                      className="w-full h-full object-contain p-0.5"
+                      onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-            <p className="text-xs text-slate-400">
-              Clean up bloated group titles in 1 click (e.g. strip <code className="bg-slate-950 px-1 py-0.5 rounded text-cyan-300">Jio TV+ | </code> so &quot;Jio TV+ | Sports&quot; becomes &quot;Sports&quot;).
-            </p>
+
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+              <button
+                type="button"
+                onClick={() => handleApplyBulkLogo(true)}
+                disabled={selectedGroups.length === 0 || isBulkApplying}
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-rose-400 text-xs font-medium transition-colors disabled:opacity-40"
+              >
+                Clear Logo
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyBulkLogo(false)}
+                disabled={selectedGroups.length === 0 || !bulkLogoUrl.trim() || isBulkApplying}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-md shadow-cyan-600/30 disabled:opacity-40"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>Apply Logo ({selectedGroups.length})</span>
+              </button>
+            </div>
+            {bulkMessage && (
+              <div className="text-[11px] text-emerald-400 mt-2 font-medium">
+                {bulkMessage}
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={prefixToStrip}
-              onChange={(e) => setPrefixToStrip(e.target.value)}
-              placeholder="Prefix to remove..."
-              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 w-44 font-mono"
-            />
-            <button
-              onClick={handleStripPrefix}
-              disabled={isProcessing || !prefixToStrip}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-all active:scale-95 disabled:opacity-50"
-            >
-              <Scissors className="w-3.5 h-3.5" />
-              <span>Strip Prefix</span>
-            </button>
+          {/* Quick Prefix Remover */}
+          <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                  <Scissors className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Bulk Strip Group Prefix</span>
+                </span>
+                <span className="text-[11px] text-slate-500">Cleaner names</span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-2">
+                Remove messy prefixes (e.g. <code>Jio TV+ | </code> or <code>⛨ 𝔼𝕩𝕥𝕣𝕒 | </code>).
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={prefixToStrip}
+                  onChange={(e) => setPrefixToStrip(e.target.value)}
+                  placeholder="e.g. Jio TV+ | "
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80 mt-2">
+              <span className="text-[11px] text-emerald-400 font-medium">
+                {stripStatus || ''}
+              </span>
+              <button
+                onClick={handleStripPrefix}
+                disabled={isProcessing || !prefixToStrip}
+                className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? 'Stripping...' : 'Strip Prefix'}
+              </button>
+            </div>
           </div>
         </div>
-
-        {stripStatus && (
-          <div className="mt-3 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/80 px-3 py-1.5 rounded-lg flex items-center gap-2">
-            <Check className="w-3.5 h-3.5" />
-            <span>{stripStatus}</span>
-          </div>
-        )}
       </div>
 
-      {/* Group Cards Grid */}
-      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800 mb-5">
-          <div className="flex items-center gap-2">
-            <Layers className="w-5 h-5 text-cyan-400" />
-            <h3 className="font-bold text-white text-base">Channel Categories &amp; Groups</h3>
-            <span className="text-xs text-slate-400">({groups.length} total)</span>
+      {/* 2. CATEGORIES TABLE WITH BULK CHECKBOXES */}
+      <div className="bg-slate-900/80 border border-slate-800 rounded-2xl shadow-xl overflow-hidden">
+        {/* Table Controls */}
+        <div className="p-4 border-b border-slate-800 bg-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSelectAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium transition-colors"
+            >
+              {selectedGroups.length === filteredGroups.length && filteredGroups.length > 0 ? (
+                <CheckSquare className="w-3.5 h-3.5 text-cyan-400" />
+              ) : (
+                <Square className="w-3.5 h-3.5 text-slate-500" />
+              )}
+              <span>{selectedGroups.length === filteredGroups.length && filteredGroups.length > 0 ? 'Deselect All' : 'Select All'}</span>
+            </button>
+
+            <span className="text-xs text-slate-400 font-medium">
+              {filteredGroups.length} Categories ({groups.length} total)
+            </span>
           </div>
-          <p className="text-xs text-slate-400 hidden sm:block">
-            Rename or toggle visibility to customize what your IPTV player displays.
-          </p>
+
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search categories..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            />
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {groups.map((group) => {
-            const isEditing = editingGroup === group.name;
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950/70 border-b border-slate-800 uppercase text-[10px] tracking-wider text-slate-400">
+              <tr>
+                <th className="py-3 px-4 w-10 text-center">Select</th>
+                <th className="py-3 px-4 w-14">Logo</th>
+                <th className="py-3 px-4">Category Name</th>
+                <th className="py-3 px-4 text-center">Channels</th>
+                <th className="py-3 px-4 text-center">Visibility</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60">
+              {filteredGroups.map((g) => {
+                const isSelected = selectedGroups.includes(g.name);
+                const isRenaming = editingGroup === g.name;
+                const isEditingLogo = editingLogoGroup === g.name;
 
-            return (
-              <div
-                key={group.name}
-                className={`border rounded-xl p-4 transition-all flex flex-col justify-between ${
-                  group.enabledCount > 0
-                    ? 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
-                    : 'bg-slate-950/30 border-slate-800/50 opacity-60'
-                }`}
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Folder className="w-4 h-4 text-cyan-500 shrink-0" />
-                      {isEditing ? (
-                        <div className="flex items-center gap-1 flex-1">
+                return (
+                  <tr
+                    key={g.name}
+                    className={`hover:bg-slate-800/40 transition-colors ${
+                      isSelected ? 'bg-cyan-950/20' : ''
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => handleToggleSelect(g.name)}
+                        className="text-slate-400 hover:text-cyan-400"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-cyan-400" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-600" />
+                        )}
+                      </button>
+                    </td>
+
+                    {/* Group Logo */}
+                    <td className="py-3 px-4">
+                      <div
+                        onClick={() => handleStartSingleLogo(g)}
+                        className="w-9 h-9 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden cursor-pointer hover:border-cyan-500 transition-colors"
+                        title="Click to edit group logo"
+                      >
+                        {g.logo ? (
+                          <img
+                            src={g.logo}
+                            alt={g.name}
+                            className="w-full h-full object-contain p-0.5"
+                            onError={(e) => ((e.target as HTMLElement).style.display = 'none')}
+                          />
+                        ) : (
+                          <Folder className="w-4 h-4 text-slate-600" />
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Group Name & inline editor */}
+                    <td className="py-3 px-4">
+                      {isRenaming ? (
+                        <div className="flex items-center gap-2 max-w-md">
                           <input
                             type="text"
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(group.name)}
-                            className="bg-slate-900 border border-cyan-500 rounded px-2 py-1 text-xs text-white focus:outline-none w-full"
+                            className="flex-1 bg-slate-950 border border-cyan-500 rounded px-2 py-1 text-xs text-white"
                             autoFocus
                           />
                           <button
-                            onClick={() => handleSaveRename(group.name)}
-                            disabled={isProcessing}
-                            className="p-1 rounded bg-cyan-600 text-white hover:bg-cyan-500"
-                            title="Save"
+                            onClick={() => handleSaveRename(g.name)}
+                            className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold"
                           >
-                            <Check className="w-3.5 h-3.5" />
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingGroup(null)}
+                            className="px-2 py-1 text-slate-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : isEditingLogo ? (
+                        <div className="flex items-center gap-2 max-w-md">
+                          <input
+                            type="url"
+                            value={singleLogoUrl}
+                            onChange={(e) => setSingleLogoUrl(e.target.value)}
+                            placeholder="Logo URL..."
+                            className="flex-1 bg-slate-950 border border-cyan-500 rounded px-2 py-1 text-xs text-cyan-300 font-mono"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSaveSingleLogo(g.name)}
+                            className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold"
+                          >
+                            Save Logo
+                          </button>
+                          <button
+                            onClick={() => setEditingLogoGroup(null)}
+                            className="px-2 py-1 text-slate-400 hover:text-white"
+                          >
+                            Cancel
                           </button>
                         </div>
                       ) : (
-                        <h4
-                          onClick={() => onFilterByGroup(group.name)}
-                          className="font-semibold text-slate-200 text-sm truncate hover:text-cyan-400 cursor-pointer"
-                          title="Click to view channels in this group"
-                        >
-                          {group.name}
-                        </h4>
+                        <div>
+                          <span
+                            onClick={() => onFilterByGroup(g.name)}
+                            className="font-semibold text-white hover:text-cyan-300 cursor-pointer transition-colors"
+                          >
+                            {g.name}
+                          </span>
+                        </div>
                       )}
-                    </div>
+                    </td>
 
-                    {!isEditing && (
+                    {/* Channel Counts */}
+                    <td className="py-3 px-4 text-center font-mono">
+                      <span className="text-cyan-400 font-semibold">{g.enabledCount}</span>
+                      <span className="text-slate-500"> / {g.count}</span>
+                    </td>
+
+                    {/* Visibility Switch */}
+                    <td className="py-3 px-4 text-center">
                       <button
-                        onClick={() => handleStartRename(group.name)}
-                        className="p-1 text-slate-500 hover:text-white rounded hover:bg-slate-800 transition-colors shrink-0"
-                        title="Rename Group"
+                        onClick={() => onToggleGroup(g.name, !g.isVisible)}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          g.isVisible
+                            ? 'text-emerald-400 bg-emerald-950/40 hover:bg-emerald-900/60'
+                            : 'text-slate-500 bg-slate-800/40 hover:bg-slate-700/60'
+                        }`}
+                        title={g.isVisible ? 'Category Active' : 'Category Hidden'}
                       >
-                        <Edit2 className="w-3 h-3" />
+                        {g.isVisible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                       </button>
-                    )}
-                  </div>
+                    </td>
 
-                  <div className="flex items-center gap-2 text-xs text-slate-400 mb-3">
-                    <span className="font-mono text-cyan-400 font-medium">
-                      {group.enabledCount} active
-                    </span>
-                    <span>/</span>
-                    <span>{group.count} total channels</span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-slate-800/80 text-xs">
-                  <button
-                    onClick={() => onFilterByGroup(group.name)}
-                    className="text-cyan-400 hover:underline"
-                  >
-                    View Channels &rarr;
-                  </button>
-
-                  <button
-                    onClick={() => onToggleGroup(group.name, group.enabledCount === 0)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors ${
-                      group.enabledCount > 0
-                        ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-950/40'
-                        : 'text-emerald-400 hover:bg-emerald-950/40'
-                    }`}
-                  >
-                    {group.enabledCount > 0 ? (
-                      <>
-                        <EyeOff className="w-3 h-3" />
-                        <span>Hide All</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye className="w-3 h-3" />
-                        <span>Enable All</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                    {/* Actions */}
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleStartSingleLogo(g)}
+                          className="p-1.5 text-slate-400 hover:text-cyan-300 rounded hover:bg-slate-800 transition-colors"
+                          title="Set group logo"
+                        >
+                          <Image className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleStartRename(g.name)}
+                          className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+                          title="Rename category"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onFilterByGroup(g.name)}
+                          className="px-2 py-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                        >
+                          View Channels
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

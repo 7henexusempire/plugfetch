@@ -13,8 +13,8 @@ export interface PlaylistSource {
 }
 
 export interface ChannelItem {
-  id: string; // unique identifier
-  sourceId: string; // playlist source id
+  id: string;
+  sourceId: string;
   tvgId: string;
   tvgName: string;
   tvgLogo: string;
@@ -23,16 +23,17 @@ export interface ChannelItem {
   groupLogo?: string;
   type?: string;
   tvgChno?: string;
-  name: string; // original name
-  url: string; // stream url
-  directives: string[]; // Kodi/VLC/ClearKey options (#KODIPROP, #EXTVLCOPT, #EXTHTTP, # clearkeys)
+  name: string;
+  url: string;
+  preDirectives: string[];
+  postDirectives: string[];
+  directives: string[];
   hasClearKey?: boolean;
   clearKeySnippet?: string;
-  
-  // User overrides
   customName?: string;
   customGroup?: string;
   customLogo?: string;
+  customGroupLogo?: string;
   customChno?: string;
   customUrl?: string;
   enabled: boolean;
@@ -45,6 +46,8 @@ export interface PlaylistSettings {
   userAgent: string;
   customTvgUrl: string;
   publicBaseUrl: string;
+  zeotvStripSuffix: boolean;
+  zeotvRemoveGroupLogo: boolean;
 }
 
 export interface CustomizationData {
@@ -53,11 +56,13 @@ export interface CustomizationData {
     customName?: string;
     customGroup?: string;
     customLogo?: string;
+    customGroupLogo?: string;
     customChno?: string;
     customUrl?: string;
     enabled?: boolean;
   }>;
   groupRenames: Record<string, string>;
+  groupLogos: Record<string, string>; // Bulk group logos
   groupVisibility: Record<string, boolean>;
   customChannels: ChannelItem[];
   settings: PlaylistSettings;
@@ -120,6 +125,8 @@ const DEFAULT_SETTINGS: PlaylistSettings = {
   userAgent: 'TiviMate/5.1.0 (Linux; Android 12) curl/8.0.0',
   customTvgUrl: '',
   publicBaseUrl: '',
+  zeotvStripSuffix: true,
+  zeotvRemoveGroupLogo: true,
 };
 
 class PlaylistService {
@@ -129,6 +136,7 @@ class PlaylistService {
   private settings: PlaylistSettings = { ...DEFAULT_SETTINGS };
   private channelOverrides: CustomizationData['channelOverrides'] = {};
   private groupRenames: Record<string, string> = {};
+  private groupLogos: Record<string, string> = {};
   private groupVisibility: Record<string, boolean> = {};
   private customChannels: ChannelItem[] = [];
 
@@ -160,13 +168,11 @@ class PlaylistService {
         const raw = fs.readFileSync(CUSTOMIZATIONS_FILE, 'utf-8');
         const data: Partial<CustomizationData> = JSON.parse(raw);
         if (Array.isArray(data.sources) && data.sources.length > 0) {
-          // Merge default sources with saved sources to ensure new default sources exist
           const loadedMap = new Map(data.sources.map((s) => [s.id, s]));
           this.sources = DEFAULT_SOURCES.map((def) => {
             const saved = loadedMap.get(def.id);
             return saved ? { ...def, ...saved } : def;
           });
-          // Add any custom sources added by user
           for (const s of data.sources) {
             if (!this.sources.some((x) => x.id === s.id)) {
               this.sources.push(s);
@@ -175,6 +181,7 @@ class PlaylistService {
         }
         if (data.channelOverrides) this.channelOverrides = data.channelOverrides;
         if (data.groupRenames) this.groupRenames = data.groupRenames;
+        if (data.groupLogos) this.groupLogos = data.groupLogos;
         if (data.groupVisibility) this.groupVisibility = data.groupVisibility;
         if (data.customChannels) this.customChannels = data.customChannels;
         if (data.settings) {
@@ -196,6 +203,7 @@ class PlaylistService {
         sources: this.sources,
         channelOverrides: this.channelOverrides,
         groupRenames: this.groupRenames,
+        groupLogos: this.groupLogos,
         groupVisibility: this.groupVisibility,
         customChannels: this.customChannels,
         settings: this.settings,
@@ -215,7 +223,6 @@ class PlaylistService {
           this.channelsBySource = cache.channelsBySource;
           this.sourceHeaders = cache.sourceHeaders || {};
           this.lastSyncTime = cache.lastSyncTime ? new Date(cache.lastSyncTime) : null;
-          // Update channel counts in sources
           for (const src of this.sources) {
             const chs = this.channelsBySource[src.id] || [];
             src.channelCount = chs.length;
@@ -246,12 +253,10 @@ class PlaylistService {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Check if any source lacks cached channels
     const hasAnyChannels = Object.values(this.channelsBySource).some((arr) => arr.length > 0);
     if (!hasAnyChannels) {
       await this.fetchAllSources();
     } else {
-      // Background fresh sync
       this.fetchAllSources().catch((e) => console.error('Initial background sync error:', e));
     }
 
@@ -291,7 +296,7 @@ class PlaylistService {
     try {
       console.log(`[PlaylistService] Fetching "${src.name}" from ${src.url}...`);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
 
       const response = await fetch(src.url, {
         headers: {
@@ -368,12 +373,20 @@ class PlaylistService {
     }
   }
 
+  /**
+   * Lossless M3U Parser:
+   * Captures preDirectives (e.g. SunNXT ClearKey KODIPROP before #EXTINF),
+   * exact #EXTINF attributes, postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, exp, hmac),
+   * and full stream URL (including ?|cookie=... parameters).
+   */
   private parseM3UContent(content: string, sourceId: string): { channels: ChannelItem[]; headers: string[] } {
     const rawLines = content.split(/\r?\n/);
     const parsedChannels: ChannelItem[] = [];
     const headers: string[] = [];
 
-    let currentInf: {
+    let currentPre: string[] = [];
+    let currentExtInf: {
+      rawLine: string;
       tvgId: string;
       tvgName: string;
       tvgLogo: string;
@@ -384,41 +397,49 @@ class PlaylistService {
       tvgChno?: string;
       name: string;
     } | null = null;
-
-    let currentDirectives: string[] = [];
+    let currentPost: string[] = [];
     let hasSeenExtInf = false;
 
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i].trim();
       if (!line) continue;
 
-      if (!hasSeenExtInf) {
-        if (line.startsWith('#EXTM3U') || (line.startsWith('#') && !line.startsWith('#EXTINF'))) {
-          headers.push(line);
-          continue;
-        }
+      if (!hasSeenExtInf && line.startsWith('#EXTM3U')) {
+        headers.push(line);
+        continue;
       }
 
       if (line.startsWith('#EXTINF:')) {
         hasSeenExtInf = true;
-        currentInf = this.parseExtInfLine(line);
-        currentDirectives = [];
+        // If an EXTINF arrived without URL (e.g. section separator title), start fresh
+        if (currentExtInf) {
+          currentPre = [];
+        }
+        currentExtInf = this.parseExtInfLine(line, sourceId);
+        currentPost = [];
       } else if (line.startsWith('#')) {
-        currentDirectives.push(line);
-      } else if (
-        line.startsWith('http://') ||
-        line.startsWith('https://') ||
-        line.startsWith('rtmp://') ||
-        line.startsWith('udp://')
-      ) {
-        if (currentInf) {
-          const rawId = currentInf.tvgId || `${currentInf.name.replace(/[^a-zA-Z0-9]/g, '_')}_${parsedChannels.length + 1}`;
-          // Namespace ID with sourceId to avoid collisions across different providers
+        // Repeated #EXTM3U in mid-file: keep as header if it has EPG url, else skip
+        if (line.startsWith('#EXTM3U')) {
+          if (line.includes('tvg-url') || line.includes('x-tvg-url')) {
+            headers.push(line);
+          }
+          continue;
+        }
+
+        if (currentExtInf) {
+          currentPost.push(line);
+        } else {
+          currentPre.push(line);
+        }
+      } else if (/^(https?|rtmp|udp|rtsp):\/\//i.test(line)) {
+        if (currentExtInf) {
+          const rawId = currentExtInf.tvgId || `${currentExtInf.name.replace(/[^a-zA-Z0-9]/g, '_')}_${parsedChannels.length + 1}`;
           const channelId = `${sourceId}_${rawId}`;
 
+          const allDirectives = [...currentPre, ...currentPost];
           let hasClearKey = false;
           let clearKeySnippet = '';
-          const clearkeyDirective = currentDirectives.find((d) => d.includes('license_key') || d.includes('clearkey'));
+          const clearkeyDirective = allDirectives.find((d) => d.includes('license_key') || d.includes('clearkey'));
           if (clearkeyDirective) {
             hasClearKey = true;
             clearKeySnippet = clearkeyDirective;
@@ -427,24 +448,27 @@ class PlaylistService {
           parsedChannels.push({
             id: channelId,
             sourceId,
-            tvgId: currentInf.tvgId || rawId,
-            tvgName: currentInf.tvgName,
-            tvgLogo: currentInf.tvgLogo,
-            tvgCategory: currentInf.tvgCategory,
-            groupTitle: currentInf.groupTitle || 'General',
-            groupLogo: currentInf.groupLogo,
-            type: currentInf.type,
-            tvgChno: currentInf.tvgChno,
-            name: currentInf.name,
+            tvgId: currentExtInf.tvgId || rawId,
+            tvgName: currentExtInf.tvgName,
+            tvgLogo: currentExtInf.tvgLogo,
+            tvgCategory: currentExtInf.tvgCategory,
+            groupTitle: currentExtInf.groupTitle || 'General',
+            groupLogo: currentExtInf.groupLogo,
+            type: currentExtInf.type,
+            tvgChno: currentExtInf.tvgChno,
+            name: currentExtInf.name,
             url: line,
-            directives: currentDirectives,
+            preDirectives: currentPre,
+            postDirectives: currentPost,
+            directives: allDirectives,
             hasClearKey,
             clearKeySnippet,
             enabled: true,
           });
 
-          currentInf = null;
-          currentDirectives = [];
+          currentExtInf = null;
+          currentPre = [];
+          currentPost = [];
         }
       }
     }
@@ -452,7 +476,7 @@ class PlaylistService {
     return { channels: parsedChannels, headers };
   }
 
-  private parseExtInfLine(line: string) {
+  private parseExtInfLine(line: string, sourceId: string) {
     const lastCommaIdx = line.lastIndexOf(',');
     let name = '';
     let attrsStr = line;
@@ -470,13 +494,28 @@ class PlaylistService {
       return match2 ? match2[1] : '';
     };
 
+    let groupTitle = getAttr('group-title') || 'General';
+    let groupLogo = getAttr('group-logo') || '';
+
+    // USER REQUIREMENT:
+    // Remove group logos and streamx suffix from zeotv playlist
+    if (sourceId === 'zeotv') {
+      if (this.settings.zeotvStripSuffix) {
+        groupTitle = groupTitle.replace(/\s*\|\s*STREAMX/gi, '').replace(/\s*STREAMX\s*/gi, '').trim();
+      }
+      if (this.settings.zeotvRemoveGroupLogo) {
+        groupLogo = '';
+      }
+    }
+
     return {
+      rawLine: line,
       tvgId: getAttr('tvg-id'),
       tvgName: getAttr('tvg-name') || name,
       tvgLogo: getAttr('tvg-logo'),
       tvgCategory: getAttr('tvg-category'),
-      groupTitle: getAttr('group-title') || 'General',
-      groupLogo: getAttr('group-logo'),
+      groupTitle,
+      groupLogo: groupLogo || undefined,
       type: getAttr('type'),
       tvgChno: getAttr('tvg-chno'),
       name: name || getAttr('tvg-name') || 'Unnamed Channel',
@@ -491,6 +530,7 @@ class PlaylistService {
           if (override.customName !== undefined) channel.customName = override.customName;
           if (override.customGroup !== undefined) channel.customGroup = override.customGroup;
           if (override.customLogo !== undefined) channel.customLogo = override.customLogo;
+          if (override.customGroupLogo !== undefined) channel.customGroupLogo = override.customGroupLogo;
           if (override.customChno !== undefined) channel.customChno = override.customChno;
           if (override.customUrl !== undefined) channel.customUrl = override.customUrl;
           if (override.enabled !== undefined) channel.enabled = override.enabled;
@@ -502,6 +542,12 @@ class PlaylistService {
         }
 
         const finalGroup = channel.customGroup || channel.groupTitle;
+
+        // Apply bulk group logo if set
+        if (this.groupLogos[finalGroup] !== undefined) {
+          channel.customGroupLogo = this.groupLogos[finalGroup];
+        }
+
         if (this.groupVisibility[finalGroup] !== undefined && override?.enabled === undefined) {
           channel.enabled = this.groupVisibility[finalGroup];
         }
@@ -581,17 +627,25 @@ class PlaylistService {
     return result;
   }
 
-  public getGroups(sourceId?: string): { name: string; count: number; enabledCount: number; isVisible: boolean }[] {
-    const groupMap: Record<string, { total: number; enabled: number }> = {};
+  public getGroups(sourceId?: string): { name: string; count: number; enabledCount: number; isVisible: boolean; logo?: string }[] {
+    const groupMap: Record<string, { total: number; enabled: number; logo?: string }> = {};
     const all = this.getAllChannels(sourceId);
 
     for (const ch of all) {
       const group = ch.customGroup || ch.groupTitle || 'General';
       if (!groupMap[group]) {
-        groupMap[group] = { total: 0, enabled: 0 };
+        groupMap[group] = {
+          total: 0,
+          enabled: 0,
+          logo: this.groupLogos[group] || ch.customGroupLogo || ch.groupLogo,
+        };
       }
       groupMap[group].total++;
       if (ch.enabled) groupMap[group].enabled++;
+
+      if (!groupMap[group].logo && (ch.customGroupLogo || ch.groupLogo)) {
+        groupMap[group].logo = ch.customGroupLogo || ch.groupLogo;
+      }
     }
 
     return Object.entries(groupMap)
@@ -600,14 +654,42 @@ class PlaylistService {
         count: stats.total,
         enabledCount: stats.enabled,
         isVisible: this.groupVisibility[name] !== false,
+        logo: this.groupLogos[name] !== undefined ? this.groupLogos[name] : stats.logo,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  public setBulkGroupLogo(groupNames: string[], logoUrl: string): number {
+    let affectedCount = 0;
+    const cleanLogo = logoUrl ? logoUrl.trim() : '';
+
+    for (const groupName of groupNames) {
+      if (cleanLogo) {
+        this.groupLogos[groupName] = cleanLogo;
+      } else {
+        delete this.groupLogos[groupName];
+      }
+
+      for (const ch of this.getAllChannels()) {
+        const effectiveGroup = ch.customGroup || ch.groupTitle;
+        if (effectiveGroup === groupName) {
+          ch.customGroupLogo = cleanLogo || undefined;
+          if (!this.channelOverrides[ch.id]) this.channelOverrides[ch.id] = {};
+          this.channelOverrides[ch.id].customGroupLogo = cleanLogo || undefined;
+          affectedCount++;
+        }
+      }
+    }
+
+    this.saveCustomizations();
+    return affectedCount;
   }
 
   public updateChannel(id: string, updates: {
     customName?: string;
     customGroup?: string;
     customLogo?: string;
+    customGroupLogo?: string;
     customChno?: string;
     customUrl?: string;
     enabled?: boolean;
@@ -630,6 +712,10 @@ class PlaylistService {
     if (updates.customLogo !== undefined) {
       this.channelOverrides[id].customLogo = updates.customLogo;
       channel.customLogo = updates.customLogo;
+    }
+    if (updates.customGroupLogo !== undefined) {
+      this.channelOverrides[id].customGroupLogo = updates.customGroupLogo;
+      channel.customGroupLogo = updates.customGroupLogo;
     }
     if (updates.customChno !== undefined) {
       this.channelOverrides[id].customChno = updates.customChno;
@@ -655,6 +741,7 @@ class PlaylistService {
       channel.customName = undefined;
       channel.customGroup = undefined;
       channel.customLogo = undefined;
+      channel.customGroupLogo = undefined;
       channel.customChno = undefined;
       channel.customUrl = undefined;
       channel.enabled = true;
@@ -685,6 +772,8 @@ class PlaylistService {
       name: channel.name,
       url: channel.url,
       tvgChno: channel.tvgChno,
+      preDirectives: [],
+      postDirectives: channel.directives || [],
       directives: channel.directives || [],
       enabled: true,
       isCustom: true,
@@ -791,6 +880,8 @@ class PlaylistService {
 
   /**
    * Generates M3U playlist file for a specific source OR all sources combined
+   * Perfectly preserving preDirectives (#KODIPROP before #EXTINF), postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, hmac),
+   * exact stream URLs, and group logos.
    */
   public generateM3U(sourceId?: string, filterGroup?: string): string {
     const isAll = !sourceId || sourceId === 'all';
@@ -799,7 +890,6 @@ class PlaylistService {
       ? channels.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
       : channels;
 
-    // Collect header lines
     let header = '#EXTM3U';
     if (!isAll && this.sourceHeaders[sourceId]?.length > 0) {
       const firstLine = this.sourceHeaders[sourceId][0];
@@ -807,8 +897,8 @@ class PlaylistService {
         header = firstLine;
       }
     } else {
-      // For combined, include comprehensive EPG attributes
-      header = '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz" refresh="3600"';
+      // Unified header with all primary EPG sources
+      header = '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://avkb.short.gy/jioepg.xml.gz,https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz,https://mitthu786.github.io/tvepg/tataplay/epg.xml.gz,https://avkb.short.gy/tsepg.xml.gz" refresh="3600"';
     }
 
     if (this.settings.customTvgUrl) {
@@ -829,27 +919,45 @@ class PlaylistService {
       const tvgName = ch.customName || ch.tvgName || displayName;
       const streamUrl = ch.customUrl || ch.url;
       const chno = ch.customChno || ch.tvgChno;
+      
+      // Determine effective group logo (custom group logo, bulk group logo, or original group logo)
+      const groupLogo = ch.customGroupLogo !== undefined
+        ? ch.customGroupLogo
+        : (this.groupLogos[groupTitle] || ch.groupLogo);
 
+      // 1. Output preDirectives (crucial for SunNXT clearkey #KODIPROP which MUST precede #EXTINF)
+      if (ch.preDirectives && ch.preDirectives.length > 0) {
+        for (const dir of ch.preDirectives) {
+          lines.push(dir);
+        }
+      }
+
+      // 2. Output #EXTINF
       let extInfParts = [`#EXTINF:-1`];
       if (tvgId) extInfParts.push(`tvg-id="${tvgId}"`);
       if (tvgName) extInfParts.push(`tvg-name="${tvgName}"`);
       if (logo) extInfParts.push(`tvg-logo="${logo}"`);
       if (ch.tvgCategory) extInfParts.push(`tvg-category="${ch.tvgCategory}"`);
       if (groupTitle) extInfParts.push(`group-title="${groupTitle}"`);
-      if (ch.groupLogo) extInfParts.push(`group-logo="${ch.groupLogo}"`);
+      if (groupLogo) extInfParts.push(`group-logo="${groupLogo}"`);
       if (chno) extInfParts.push(`tvg-chno="${chno}"`);
       if (ch.type) extInfParts.push(`type="${ch.type}"`);
 
       lines.push(`${extInfParts.join(' ')},${displayName}`);
 
-      // Forward all Kodi/VLC/ClearKey/EXTHTTP directives
-      if (ch.directives && ch.directives.length > 0) {
+      // 3. Output postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, hmac, exp, User-Agent)
+      if (ch.postDirectives && ch.postDirectives.length > 0) {
+        for (const dir of ch.postDirectives) {
+          lines.push(dir);
+        }
+      } else if (ch.directives && ch.directives.length > 0 && ch.preDirectives.length === 0) {
+        // Fallback for custom channels
         for (const dir of ch.directives) {
           lines.push(dir);
         }
       }
 
-      // Stream URL
+      // 4. Output stream URL
       lines.push(streamUrl);
     }
 
@@ -888,13 +996,16 @@ class PlaylistService {
         group: c.customGroup || c.groupTitle,
         originalGroup: c.groupTitle,
         logo: c.customLogo || c.tvgLogo,
+        groupLogo: c.customGroupLogo || this.groupLogos[c.customGroup || c.groupTitle] || c.groupLogo || null,
         streamUrl: c.customUrl || c.url,
         channelNumber: c.customChno || c.tvgChno || null,
         type: c.type || 'stream',
         hasClearKey: !!c.hasClearKey,
+        clearKeySnippet: c.clearKeySnippet || null,
         enabled: c.enabled,
         isCustom: !!c.isCustom,
-        directivesCount: c.directives.length,
+        preDirectives: c.preDirectives,
+        postDirectives: c.postDirectives,
         directives: c.directives,
       })),
     };
@@ -905,6 +1016,7 @@ class PlaylistService {
       sources: this.sources,
       channelOverrides: this.channelOverrides,
       groupRenames: this.groupRenames,
+      groupLogos: this.groupLogos,
       groupVisibility: this.groupVisibility,
       customChannels: this.customChannels,
       settings: this.settings,
@@ -915,6 +1027,7 @@ class PlaylistService {
     if (backup.sources) this.sources = backup.sources;
     if (backup.channelOverrides) this.channelOverrides = backup.channelOverrides;
     if (backup.groupRenames) this.groupRenames = backup.groupRenames;
+    if (backup.groupLogos) this.groupLogos = backup.groupLogos;
     if (backup.groupVisibility) this.groupVisibility = backup.groupVisibility;
     if (backup.customChannels) this.customChannels = backup.customChannels;
     if (backup.settings) this.settings = { ...DEFAULT_SETTINGS, ...backup.settings };
