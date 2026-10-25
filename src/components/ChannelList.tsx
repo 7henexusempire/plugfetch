@@ -67,24 +67,6 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onAddChannel,
   onPreviewChannel,
 }) => {
-  totalChannels,
-  currentPage,
-  totalPages,
-  pageSize,
-  searchQuery,
-  selectedGroup,
-  statusFilter,
-  isLoading,
-  onSearchChange,
-  onGroupChange,
-  onStatusChange,
-  onPageChange,
-  onToggleChannel,
-  onEditChannel,
-  onResetChannel,
-  onAddChannel,
-  onPreviewChannel,
-}) => {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const handleImageError = (id: string) => {

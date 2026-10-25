@@ -1,14 +1,47 @@
 {
+  "sources": [
+    {
+      "id": "plugx",
+      "name": "Plugx VIP Playlist",
+      "url": "https://plugxvipplaylist.lovable.app/api/playlist",
+      "enabled": true,
+      "lastSyncTime": "2026-10-25T12:19:18.339Z",
+      "status": "success",
+      "errorMessage": null,
+      "channelCount": 1636
+    },
+    {
+      "id": "server-lrl45",
+      "name": "Vaathala & Hotstar Live",
+      "url": "https://server.lrl45.workers.dev/channel/raw?=m3u",
+      "enabled": true,
+      "lastSyncTime": "2026-10-25T12:19:30.933Z",
+      "status": "success",
+      "errorMessage": null,
+      "channelCount": 5198
+    },
+    {
+      "id": "zeotv",
+      "name": "SunNXT & StreamX Live",
+      "url": "https://zeotvyash.streamxlivenow.workers.dev/",
+      "enabled": true,
+      "lastSyncTime": "2026-10-25T12:19:39.305Z",
+      "status": "success",
+      "errorMessage": null,
+      "channelCount": 1474
+    }
+  ],
   "channelOverrides": {},
   "groupRenames": {},
   "groupVisibility": {},
   "customChannels": [],
   "settings": {
-    "upstreamUrl": "https://plugxvipplaylist.lovable.app/api/playlist",
     "syncIntervalMinutes": 30,
     "autoSync": true,
-    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 IPTV/1.0",
-    "removeGroupPrefix": "",
-    "customTvgUrl": ""
+    "userAgent": "TiviMate/5.1.0 (Linux; Android 12) curl/8.0.0",
+    "customTvgUrl": "",
+    "publicBaseUrl": "",
+    "upstreamUrl": "https://plugxvipplaylist.lovable.app/api/playlist",
+    "removeGroupPrefix": ""
   }
 }

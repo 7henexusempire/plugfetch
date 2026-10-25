@@ -117,7 +117,7 @@ const DEFAULT_SOURCES: PlaylistSource[] = [
 const DEFAULT_SETTINGS: PlaylistSettings = {
   syncIntervalMinutes: 30,
   autoSync: true,
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 IPTV/2.0',
+  userAgent: 'TiviMate/5.1.0 (Linux; Android 12) curl/8.0.0',
   customTvgUrl: '',
   publicBaseUrl: '',
 };
@@ -177,7 +177,12 @@ class PlaylistService {
         if (data.groupRenames) this.groupRenames = data.groupRenames;
         if (data.groupVisibility) this.groupVisibility = data.groupVisibility;
         if (data.customChannels) this.customChannels = data.customChannels;
-        if (data.settings) this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
+        if (data.settings) {
+          this.settings = { ...DEFAULT_SETTINGS, ...data.settings };
+          if (!this.settings.userAgent || this.settings.userAgent.includes('Chrome/')) {
+            this.settings.userAgent = DEFAULT_SETTINGS.userAgent;
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to load customizations:', err);
