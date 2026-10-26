@@ -14,7 +14,7 @@ import { ToastContainer } from './components/ToastContainer';
 import { QuickConnect } from './components/QuickConnect';
 import { ChannelList } from './components/ChannelList';
 import { GroupManager } from './components/GroupManager';
-import { AniNexusView } from './components/AniNexusView';
+import { NexusEmpireView } from './components/NexusEmpireView';
 import { RawInspector } from './components/RawInspector';
 import { ChannelModal } from './components/ChannelModal';
 import { AddChannelModal } from './components/AddChannelModal';
@@ -46,7 +46,7 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'aninexus' | 'raw'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'nexusempire' | 'aninexus' | 'raw'>('channels');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState<boolean>(true);
 
@@ -69,7 +69,8 @@ export default function App() {
     publicBaseUrl: '',
     zeotvStripSuffix: true,
     zeotvRemoveGroupLogo: true,
-    appTitle: 'Cartel 187',
+    appTitle: 'Nexus',
+    dedupMode: 'smart',
   });
 
   const notify = (
@@ -574,17 +575,17 @@ export default function App() {
               <span>Categories ({groups.length})</span>
             </button>
 
-            {/* AniNexus Dedicated Tab */}
+            {/* NexusEmpire Dedicated Tab */}
             <button
-              onClick={() => setActiveTab('aninexus')}
+              onClick={() => setActiveTab('nexusempire')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'aninexus'
-                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                activeTab === 'nexusempire' || activeTab === 'aninexus'
+                  ? 'bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
                   : 'text-indigo-300 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <Radio className="w-4 h-4 text-indigo-400" />
-              <span>AniNexus (AniTv &amp; StreamBox)</span>
+              <Radio className="w-4 h-4 text-cyan-400" />
+              <span>NexusEmpire (AniTv &amp; StreamBox)</span>
             </button>
 
             <button
@@ -663,8 +664,8 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'aninexus' && (
-          <AniNexusView
+        {(activeTab === 'nexusempire' || activeTab === 'aninexus') && (
+          <NexusEmpireView
             onNotify={notify}
             publicBaseUrl={settings.publicBaseUrl}
             onPreviewChannel={(ch) => setPreviewingChannel(ch)}
@@ -678,8 +679,8 @@ export default function App() {
       <footer className="relative z-10 border-t border-slate-900 bg-slate-950/90 py-6 text-center text-xs text-slate-400 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="flex items-center gap-2">
-            <span className="font-bold text-white tracking-wide">CARTEL 187</span>
-            <span>· Auto-refreshing all streams &amp; AniNexus feeds every {status?.syncIntervalMinutes || 30} minutes</span>
+            <span className="font-bold text-white tracking-wide">NEXUS</span>
+            <span>· Auto-refreshing all streams &amp; NexusEmpire feeds every {status?.syncIntervalMinutes || 30} minutes</span>
           </p>
           <p className="text-slate-400">
             Engineered for <span className="text-cyan-300 font-semibold">OTT Navigator</span>, <span className="text-cyan-300 font-semibold">TiviMate</span>, <span className="text-indigo-300 font-semibold">AniTv</span> &amp; <span className="text-slate-200">StreamBox</span>

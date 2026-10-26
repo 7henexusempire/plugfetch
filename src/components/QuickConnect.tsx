@@ -127,6 +127,47 @@ export const QuickConnect: React.FC<QuickConnectProps> = ({
         </div>
       </div>
 
+      {/* 2. NEXUSEMPIRE MASTER URL CARD */}
+      <div className="mt-4 p-5 rounded-2xl bg-gradient-to-r from-indigo-950/40 via-slate-950 to-purple-950/40 border border-indigo-500/40 shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-indigo-400" />
+                NexusEmpire Master Catalog (For AniTv &amp; StreamBox)
+              </span>
+              <span className="text-[10px] bg-indigo-900/60 border border-indigo-700 text-indigo-200 px-2 py-0.5 rounded font-mono font-bold">
+                ZERO DUPLICATES
+              </span>
+            </div>
+            <div className="bg-slate-900 border border-indigo-800/60 rounded-xl px-3.5 py-2.5 font-mono text-xs text-indigo-300 truncate select-all">
+              {`${origin}/api/nexusempire/all.m3u`}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1.5">
+              Includes Zee, JioTV, Match Events, Sony, Star Sports, Willow, and custom categories with smart stream variant preservation.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleCopy(`${origin}/api/nexusempire/all.m3u`, 'nexusempire_master')}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all shadow-md active:scale-95"
+            >
+              {copiedKey === 'nexusempire_master' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span>{copiedKey === 'nexusempire_master' ? 'Copied URL!' : 'Copy NexusEmpire M3U'}</span>
+            </button>
+            <a
+              href="/api/nexusempire/all.m3u"
+              download="nexusempire_master.m3u"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              <span>Download</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
       {/* 2. INDIVIDUAL SEPARATE PLAYLIST URLS */}
       <div className="mt-6">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3 flex items-center gap-2">

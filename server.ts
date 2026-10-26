@@ -75,57 +75,146 @@ app.get('/api/playlist/all.json', (req, res) => serveJSON(req, res, 'all'));
 app.get('/playlist/all.json', (req, res) => serveJSON(req, res, 'all'));
 
 // ============================================================
-// 2. ANINEXUS STREAMBOX & ANITV ENDPOINTS
+// 2. NEXUSEMPIRE & ANINEXUS STREAMBOX ENDPOINTS
 // ============================================================
+function serveNexusEmpireM3U(req: Request, res: Response, slug: string) {
+  const content = playlistService.generateNexusEmpireM3U(slug);
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="nexusempire_${slug}.m3u"`);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=600, stale-while-revalidate=1200');
+  return res.send(content);
+}
+
+function serveNexusEmpireJSON(req: Request, res: Response, slug: string) {
+  const data = playlistService.generateNexusEmpireJSON(slug);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json(data);
+}
+
+// NexusEmpire Primary Routes
+app.get('/api/nexusempire', (req: Request, res: Response) => {
+  return res.json(playlistService.getNexusEmpireItems());
+});
+
+app.get('/nexusempire/all.m3u', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/nexusempire/all.m3u8', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/api/nexusempire/all.m3u', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/api/nexusempire/all.m3u8', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/api/nexusempire/all.json', (req, res) => serveNexusEmpireJSON(req, res, 'all'));
+app.get('/nexusempire/all.json', (req, res) => serveNexusEmpireJSON(req, res, 'all'));
+
+app.get('/nexusempire/:slug.m3u', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/nexusempire/:slug.m3u8', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/api/nexusempire/:slug.m3u', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/api/nexusempire/:slug.m3u8', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/api/nexusempire/:slug.json', (req, res) => serveNexusEmpireJSON(req, res, req.params.slug));
+
+// Backward Compatibility for AniNexus clients
 app.get('/api/aninexus', (req: Request, res: Response) => {
-  return res.json(playlistService.getAniNexusItems());
+  return res.json(playlistService.getNexusEmpireItems());
+});
+app.get('/api/aninexus/all.m3u', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/api/aninexus/all.m3u8', (req, res) => serveNexusEmpireM3U(req, res, 'all'));
+app.get('/api/aninexus/all.json', (req, res) => serveNexusEmpireJSON(req, res, 'all'));
+app.get('/api/aninexus/:slug.m3u', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/api/aninexus/:slug.m3u8', (req, res) => serveNexusEmpireM3U(req, res, req.params.slug));
+app.get('/api/aninexus/:slug.json', (req, res) => serveNexusEmpireJSON(req, res, req.params.slug));
+
+// NexusEmpire Category Management APIs
+app.get('/api/nexusempire/categories', (req: Request, res: Response) => {
+  return res.json(playlistService.getNexusEmpireCategories());
 });
 
-app.get('/api/aninexus/all.m3u', (req, res) => {
-  const content = playlistService.generateAniNexusM3U('all');
-  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
-  res.setHeader('Content-Disposition', 'inline; filename="aninexus_master.m3u"');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.send(content);
+app.post('/api/nexusempire/categories', (req: Request, res: Response) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Category name is required' });
+    const ok = playlistService.createNexusEmpireCategory(name);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/aninexus/all.m3u8', (req, res) => {
-  const content = playlistService.generateAniNexusM3U('all');
-  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
-  res.setHeader('Content-Disposition', 'inline; filename="aninexus_master.m3u"');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.send(content);
+app.put('/api/nexusempire/categories/rename', (req: Request, res: Response) => {
+  try {
+    const { oldName, newName } = req.body;
+    if (!oldName || !newName) return res.status(400).json({ error: 'oldName and newName are required' });
+    const ok = playlistService.renameNexusEmpireCategory(oldName, newName);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/aninexus/all.json', (req, res) => {
-  return res.json(playlistService.generateAniNexusJSON('all'));
+// NexusEmpire Items / Streams Management APIs
+app.post('/api/nexusempire/items', (req: Request, res: Response) => {
+  try {
+    const { name, uri, slug, category, logo, description } = req.body;
+    if (!name || !uri) return res.status(400).json({ error: 'Name and stream URI are required' });
+    const created = playlistService.addNexusEmpireItem({ name, uri, slug, category, logo, description });
+    return res.json({ success: true, item: created });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/aninexus/:slug.m3u', (req, res) => {
-  const { slug } = req.params;
-  const content = playlistService.generateAniNexusM3U(slug);
-  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
-  res.setHeader('Content-Disposition', `inline; filename="aninexus_${slug}.m3u"`);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.send(content);
+app.put('/api/nexusempire/items/:id', (req: Request, res: Response) => {
+  try {
+    const updated = playlistService.updateNexusEmpireItem(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Stream item not found' });
+    return res.json({ success: true, item: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/aninexus/:slug.m3u8', (req, res) => {
-  const { slug } = req.params;
-  const content = playlistService.generateAniNexusM3U(slug);
-  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
-  res.setHeader('Content-Disposition', `inline; filename="aninexus_${slug}.m3u"`);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  return res.send(content);
+app.delete('/api/nexusempire/items/:id', (req: Request, res: Response) => {
+  try {
+    const ok = playlistService.deleteNexusEmpireItem(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
-app.get('/api/aninexus/:slug.json', (req, res) => {
-  const { slug } = req.params;
-  return res.json(playlistService.generateAniNexusJSON(slug));
+app.post('/api/nexusempire/items/:id/toggle', (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+    const updated = playlistService.updateNexusEmpireItem(req.params.id, { enabled });
+    if (!updated) return res.status(404).json({ error: 'Stream item not found' });
+    return res.json({ success: true, item: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/nexusempire/move', (req: Request, res: Response) => {
+  try {
+    const { itemIds, category } = req.body;
+    if (!Array.isArray(itemIds) || !category) {
+      return res.status(400).json({ error: 'itemIds array and target category are required' });
+    }
+    const moved = playlistService.moveNexusEmpireItemsToCategory(itemIds, category);
+    return res.json({ success: true, movedCount: moved });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/nexusempire/items/:id/channels', (req: Request, res: Response) => {
+  try {
+    const result = playlistService.getChannelsForNexusEmpireCategory(req.params.id, true);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
 });
 
 // ============================================================
-// 3. INDIVIDUAL PLAYLIST ENDPOINTS (by custom slug or ID, e.g. /api/playlist/cartelx.m3u)
+// 3. INDIVIDUAL PLAYLIST ENDPOINTS (by custom slug or ID, e.g. /api/playlist/nexus-vip.m3u)
 // ============================================================
 app.get('/api/playlist/:slug.m3u', (req, res) => serveM3U(req, res, req.params.slug));
 app.get('/api/playlist/:slug.m3u8', (req, res) => serveM3U(req, res, req.params.slug));
@@ -471,7 +560,14 @@ async function startServer() {
     console.log(`[Server] Serving production static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get('*', (req, res, next) => {
-      if (req.path.startsWith('/api') || req.path.startsWith('/playlist') || req.path.endsWith('.m3u')) {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/playlist') ||
+        req.path.startsWith('/nexusempire') ||
+        req.path.startsWith('/aninexus') ||
+        req.path.endsWith('.m3u') ||
+        req.path.endsWith('.m3u8')
+      ) {
         return next();
       }
       res.sendFile(path.join(distPath, 'index.html'));
@@ -487,9 +583,9 @@ async function startServer() {
   }
 
   app.listen(PORT, HOST, () => {
-    console.log(`[Cartel 187] Engine running at http://${HOST}:${PORT}`);
-    console.log(`[Cartel 187] Master M3U: http://${HOST}:${PORT}/api/playlist/all.m3u`);
-    console.log(`[Cartel 187] AniNexus Master M3U: http://${HOST}:${PORT}/api/aninexus/all.m3u`);
+    console.log(`[Nexus] Engine running at http://${HOST}:${PORT}`);
+    console.log(`[Nexus] Master M3U: http://${HOST}:${PORT}/api/playlist/all.m3u`);
+    console.log(`[Nexus] NexusEmpire Master M3U: http://${HOST}:${PORT}/api/nexusempire/all.m3u`);
   });
 }
 

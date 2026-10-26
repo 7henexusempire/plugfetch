@@ -24,6 +24,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [publicBaseUrl, setPublicBaseUrl] = useState(settings.publicBaseUrl || '');
   const [zeotvStripSuffix, setZeotvStripSuffix] = useState(settings.zeotvStripSuffix !== false);
   const [zeotvRemoveGroupLogo, setZeotvRemoveGroupLogo] = useState(settings.zeotvRemoveGroupLogo !== false);
+  const [dedupMode, setDedupMode] = useState<'smart' | 'strict' | 'url_only' | 'off'>(settings.dedupMode || 'smart');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         publicBaseUrl: publicBaseUrl.trim(),
         zeotvStripSuffix,
         zeotvRemoveGroupLogo,
+        dedupMode,
       });
       setSavedSuccess(true);
       setTimeout(() => {
@@ -166,6 +168,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="text-[11px] text-slate-400 mt-1">
               Leave blank to keep original EPG tags from upstream playlists.
             </p>
+          </div>
+
+          {/* Intelligent Stream Deduplication Engine */}
+          <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span>Stream Deduplication Engine</span>
+              </h4>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-500/40 text-cyan-300">
+                Active
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Eliminates repeating streams in M3U exports while preserving alternative stream feeds with identical names (e.g. Sony SAB HD).
+            </p>
+
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <label className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                dedupMode === 'smart' ? 'bg-cyan-950/60 border-cyan-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
+              }`}>
+                <input
+                  type="radio"
+                  name="dedupMode"
+                  value="smart"
+                  checked={dedupMode === 'smart'}
+                  onChange={() => setDedupMode('smart')}
+                  className="sr-only"
+                />
+                <div className="font-bold text-xs text-cyan-300">Smart Disambiguation</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Removes exact dupes; labels multi-streams [Stream 1], [Stream 2]</div>
+              </label>
+
+              <label className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                dedupMode === 'strict' ? 'bg-cyan-950/60 border-cyan-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
+              }`}>
+                <input
+                  type="radio"
+                  name="dedupMode"
+                  value="strict"
+                  checked={dedupMode === 'strict'}
+                  onChange={() => setDedupMode('strict')}
+                  className="sr-only"
+                />
+                <div className="font-bold text-xs text-slate-200">Strict Single Feed</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">Forces only 1 stream per channel name</div>
+              </label>
+            </div>
           </div>
 
           {/* ZeoTV Formatting Rules */}

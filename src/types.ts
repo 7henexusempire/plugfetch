@@ -12,20 +12,27 @@ export interface PlaylistSource {
   channelCount: number;
 }
 
-export interface AniNexusItem {
+export interface NexusEmpireItem {
   id: string;
   name: string;
-  uri: string; // e.g. streambox://open/8003bfd97ec3d87c8df2280494c3aa26
+  uri: string; // e.g. streambox://open/8003bfd97ec3d87c8df2280494c3aa26 or custom stream URL
   hash: string;
-  m3uSlug: string; // e.g. 'zee' -> /api/aninexus/zee.m3u
-  category: string;
+  slug: string; // e.g. 'zee' -> /api/nexusempire/zee.m3u & /nexusempire/zee.m3u
+  m3uSlug: string; // alias for slug
+  category: string; // Category name (e.g. 'Jio Sports', 'Entertainment', 'Cricket', etc.)
   channelCount: number;
   status: 'ready' | 'fetching' | 'error';
   lastUpdated: string | null;
   logo: string;
   description: string;
   enabled: boolean;
+  isCustom?: boolean;
+  filterKeywords?: string[];
+  assignedChannelIds?: string[];
 }
+
+// Backward-compatible alias
+export type AniNexusItem = NexusEmpireItem;
 
 export interface ChannelItem {
   id: string;
@@ -53,6 +60,10 @@ export interface ChannelItem {
   customUrl?: string;
   enabled: boolean;
   isCustom?: boolean;
+  // Intelligent deduplication metadata
+  isDuplicate?: boolean;
+  streamVariant?: number; // e.g. 1, 2 if multiple distinct streams share the same channel name
+  duplicateOf?: string;
 }
 
 export interface GroupInfo {
@@ -75,7 +86,15 @@ export interface SyncStatus {
   autoSync: boolean;
   publicBaseUrl?: string;
   sources: PlaylistSource[];
-  aninexus?: AniNexusItem[];
+  nexusempire?: NexusEmpireItem[];
+  aninexus?: NexusEmpireItem[];
+  dedupMode?: 'smart' | 'strict' | 'url_only' | 'off';
+  dedupStats?: {
+    totalRaw: number;
+    exactDuplicatesRemoved: number;
+    distinctVariantsPreserved: number;
+    finalCleanChannels: number;
+  };
 }
 
 export interface PlaylistSettings {
@@ -87,6 +106,7 @@ export interface PlaylistSettings {
   zeotvStripSuffix: boolean;
   zeotvRemoveGroupLogo: boolean;
   appTitle?: string;
+  dedupMode: 'smart' | 'strict' | 'url_only' | 'off';
 }
 
 export interface ToastItem {

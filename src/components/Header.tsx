@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Radio, CheckCircle2, AlertCircle, Clock, Layers, Upload, Settings } from 'lucide-react';
+import { RefreshCw, Radio, CheckCircle2, AlertCircle, Clock, Layers, Upload, Settings, ShieldCheck } from 'lucide-react';
 import { SyncStatus } from '../types';
-import { CartelLogo } from './CartelLogo';
+import { NexusLogo } from './NexusLogo';
 
 interface HeaderProps {
   status: SyncStatus | null;
@@ -11,7 +11,7 @@ interface HeaderProps {
   onOpenSources: () => void;
   onOpenUpload: () => void;
   activeTab: string;
-  onSelectTab: (tab: 'channels' | 'groups' | 'aninexus' | 'raw') => void;
+  onSelectTab: (tab: 'channels' | 'groups' | 'nexusempire' | 'raw') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -51,30 +51,32 @@ export const Header: React.FC<HeaderProps> = ({
     return () => clearInterval(interval);
   }, [status?.nextSyncTime, status?.autoSync]);
 
-  const formatLastSync = (timeStr: string | null) => {
-    if (!timeStr) return 'Never';
-    try {
-      const date = new Date(timeStr);
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch {
-      return timeStr;
-    }
-  };
-
   const sourcesCount = status?.sources?.length || 0;
   const activeSourcesCount = status?.sources?.filter((s) => s.enabled).length || 0;
+  const dedupStats = status?.dedupStats;
 
   return (
-    <header className="border-b border-slate-800/90 bg-slate-950/80 backdrop-blur-xl sticky top-0 z-40">
+    <header className="border-b border-slate-800/90 bg-slate-950/85 backdrop-blur-xl sticky top-0 z-40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-4">
           {/* Logo & Brand */}
           <div className="cursor-pointer" onClick={() => onSelectTab('channels')}>
-            <CartelLogo size="md" showText={true} />
+            <NexusLogo size="md" showText={true} />
           </div>
 
           {/* Sync Status Badge & Action Controls */}
           <div className="flex items-center gap-2 sm:gap-3">
+            {/* Deduplication Shield Badge */}
+            {dedupStats && dedupStats.exactDuplicatesRemoved > 0 && (
+              <div
+                className="hidden xl:flex items-center gap-1.5 bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-1.5 rounded-xl text-[11px] text-emerald-300"
+                title={`${dedupStats.exactDuplicatesRemoved} duplicate streams merged, ${dedupStats.distinctVariantsPreserved} alternative stream feeds preserved.`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>{dedupStats.exactDuplicatesRemoved} Dups Filtered</span>
+              </div>
+            )}
+
             {/* Countdown Badge */}
             <div className="hidden lg:flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl text-xs text-slate-300">
               <Clock className="w-3.5 h-3.5 text-cyan-400" />

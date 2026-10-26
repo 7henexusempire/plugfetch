@@ -2,10 +2,16 @@ import fs from 'fs';
 import path from 'path';
 import {
   PlaylistSource,
+  NexusEmpireItem,
   AniNexusItem,
   ChannelItem,
   PlaylistSettings,
 } from '../types';
+import {
+  deduplicateChannelList,
+  normalizeStreamUrl,
+  DeduplicationResult,
+} from './deduplicator';
 
 export interface CustomizationData {
   sources: PlaylistSource[];
@@ -23,6 +29,9 @@ export interface CustomizationData {
   groupVisibility: Record<string, boolean>;
   customChannels: ChannelItem[];
   settings: PlaylistSettings;
+  nexusempireItems?: NexusEmpireItem[];
+  nexusempireCategories?: string[];
+  nexusempireChannelAssignments?: Record<string, string[]>;
   aninexusOverrides?: Record<string, { enabled?: boolean; customName?: string }>;
 }
 
@@ -38,7 +47,15 @@ export interface GlobalSyncStatus {
   autoSync: boolean;
   publicBaseUrl: string;
   sources: PlaylistSource[];
-  aninexus: AniNexusItem[];
+  nexusempire: NexusEmpireItem[];
+  aninexus: NexusEmpireItem[];
+  dedupMode: 'smart' | 'strict' | 'url_only' | 'off';
+  dedupStats?: {
+    totalRaw: number;
+    exactDuplicatesRemoved: number;
+    distinctVariantsPreserved: number;
+    finalCleanChannels: number;
+  };
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
@@ -49,8 +66,8 @@ const CUSTOMIZATIONS_FILE = path.join(DATA_DIR, 'customizations.json');
 const DEFAULT_SOURCES: PlaylistSource[] = [
   {
     id: 'plugx',
-    slug: 'cartelx',
-    name: 'CartelX VIP (Plugx)',
+    slug: 'nexus-vip',
+    name: 'Nexus VIP (Plugx)',
     url: 'https://plugxvipplaylist.lovable.app/api/playlist',
     type: 'remote',
     enabled: true,
@@ -61,8 +78,8 @@ const DEFAULT_SOURCES: PlaylistSource[] = [
   },
   {
     id: 'server-lrl45',
-    slug: 'vaathala',
-    name: 'Vaathala & Hotstar Live',
+    slug: 'hotstar-live',
+    name: 'Hotstar & Regional Live',
     url: 'https://server.lrl45.workers.dev/channel/raw?=m3u',
     type: 'remote',
     enabled: true,
@@ -85,14 +102,15 @@ const DEFAULT_SOURCES: PlaylistSource[] = [
   },
 ];
 
-export const DEFAULT_ANINEXUS: AniNexusItem[] = [
+export const DEFAULT_NEXUSEMPIRE: NexusEmpireItem[] = [
   {
     id: 'zee',
     name: 'Zee Network Live',
     uri: 'streambox://open/8003bfd97ec3d87c8df2280494c3aa26',
     hash: '8003bfd97ec3d87c8df2280494c3aa26',
+    slug: 'zee',
     m3uSlug: 'zee',
-    category: 'Zee Entertainment & Movies',
+    category: 'Entertainment & Movies',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -105,8 +123,9 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'JioTV Live Plus',
     uri: 'streambox://open/67e9bdf279c6a6a31d59927595346d28',
     hash: '67e9bdf279c6a6a31d59927595346d28',
+    slug: 'jiiotv',
     m3uSlug: 'jiiotv',
-    category: 'JioTV & Cinema Live',
+    category: 'JioTV & Multiplex',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -119,8 +138,9 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'Match Events Live',
     uri: 'streambox://open/dbd3d88df5fe1594d5d64afb3b6704be',
     hash: 'dbd3d88df5fe1594d5d64afb3b6704be',
+    slug: 'matchevents',
     m3uSlug: 'matchevents',
-    category: 'Live Sports & Match Events',
+    category: 'Live Sports',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -133,8 +153,9 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'Sony Network (SonyLIV)',
     uri: 'streambox://open/4397be6aa83e687053eeb1f55b4f9f48',
     hash: '4397be6aa83e687053eeb1f55b4f9f48',
+    slug: 'sony',
     m3uSlug: 'sony',
-    category: 'Sony Pictures Networks',
+    category: 'Sony Entertainment',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -147,8 +168,9 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'Star Sports Hub',
     uri: 'streambox://open/e5431b6490c23efb29dda4133190826c',
     hash: 'e5431b6490c23efb29dda4133190826c',
+    slug: 'starsports',
     m3uSlug: 'starsports',
-    category: 'Star Sports Network',
+    category: 'Star Sports',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -161,8 +183,9 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'Willow TV Cricket',
     uri: 'streambox://open/255cfab9f98da87dab11a6e0a337279e',
     hash: '255cfab9f98da87dab11a6e0a337279e',
+    slug: 'willow',
     m3uSlug: 'willow',
-    category: 'Willow Cricket HD',
+    category: 'Cricket Exclusive',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
@@ -175,15 +198,29 @@ export const DEFAULT_ANINEXUS: AniNexusItem[] = [
     name: 'All TV Channels (Master)',
     uri: 'streambox://open/188140cf39bd8728cfa2f19290218e2b',
     hash: '188140cf39bd8728cfa2f19290218e2b',
+    slug: 'alltv',
     m3uSlug: 'alltv',
-    category: 'AniNexus Unified Bouquet',
+    category: 'All TV Bouquet',
     channelCount: 0,
     status: 'ready',
     lastUpdated: null,
-    logo: 'https://anivortex.in/images/anivortex_logo_transparent.webp',
-    description: 'Comprehensive AniNexus catalog combining all categories and channels into one master playlist.',
+    logo: '/nexus-logo.png',
+    description: 'Comprehensive NexusEmpire catalog combining all categories and channels into one master playlist.',
     enabled: true,
   },
+];
+
+export const DEFAULT_ANINEXUS = DEFAULT_NEXUSEMPIRE;
+
+export const DEFAULT_NEXUSEMPIRE_CATEGORIES = [
+  'Entertainment & Movies',
+  'Live Sports',
+  'Star Sports',
+  'Cricket Exclusive',
+  'Sony Entertainment',
+  'JioTV & Multiplex',
+  'Jio Sports',
+  'News & Info',
 ];
 
 const DEFAULT_SETTINGS: PlaylistSettings = {
@@ -194,12 +231,15 @@ const DEFAULT_SETTINGS: PlaylistSettings = {
   publicBaseUrl: '',
   zeotvStripSuffix: true,
   zeotvRemoveGroupLogo: true,
-  appTitle: 'Cartel 187',
+  appTitle: 'Nexus',
+  dedupMode: 'smart',
 };
 
 class PlaylistService {
   private sources: PlaylistSource[] = [...DEFAULT_SOURCES];
-  private aninexusItems: AniNexusItem[] = [...DEFAULT_ANINEXUS];
+  private nexusempireItems: NexusEmpireItem[] = [...DEFAULT_NEXUSEMPIRE];
+  private nexusempireCategories: string[] = [...DEFAULT_NEXUSEMPIRE_CATEGORIES];
+  private nexusempireChannelAssignments: Record<string, string[]> = {};
   private sourceHeaders: Record<string, string[]> = {};
   private channelsBySource: Record<string, ChannelItem[]> = {};
   private settings: PlaylistSettings = { ...DEFAULT_SETTINGS };
@@ -250,6 +290,24 @@ class PlaylistService {
             }
           }
         }
+        if (Array.isArray(data.nexusempireItems) && data.nexusempireItems.length > 0) {
+          const loadedMap = new Map(data.nexusempireItems.map((i) => [i.id, i]));
+          this.nexusempireItems = DEFAULT_NEXUSEMPIRE.map((def) => {
+            const saved = loadedMap.get(def.id);
+            return saved ? { ...def, ...saved } : def;
+          });
+          for (const item of data.nexusempireItems) {
+            if (!this.nexusempireItems.some((x) => x.id === item.id)) {
+              this.nexusempireItems.push(item);
+            }
+          }
+        }
+        if (Array.isArray(data.nexusempireCategories) && data.nexusempireCategories.length > 0) {
+          this.nexusempireCategories = Array.from(new Set([...DEFAULT_NEXUSEMPIRE_CATEGORIES, ...data.nexusempireCategories]));
+        }
+        if (data.nexusempireChannelAssignments) {
+          this.nexusempireChannelAssignments = data.nexusempireChannelAssignments;
+        }
         if (data.channelOverrides) this.channelOverrides = data.channelOverrides;
         if (data.groupRenames) this.groupRenames = data.groupRenames;
         if (data.groupLogos) this.groupLogos = data.groupLogos;
@@ -278,6 +336,9 @@ class PlaylistService {
         groupVisibility: this.groupVisibility,
         customChannels: this.customChannels,
         settings: this.settings,
+        nexusempireItems: this.nexusempireItems,
+        nexusempireCategories: this.nexusempireCategories,
+        nexusempireChannelAssignments: this.nexusempireChannelAssignments,
       };
       fs.writeFileSync(CUSTOMIZATIONS_FILE, JSON.stringify(data, null, 2), 'utf-8');
     } catch (err) {
@@ -636,77 +697,286 @@ class PlaylistService {
   }
 
   /**
-   * Updates channel counts for each AniNexus stream category
+   * Updates channel counts for each NexusEmpire stream category
    */
-  private updateAniNexusCounts() {
-    const all = this.getAllChannels();
-    for (const item of this.aninexusItems) {
+  private updateNexusEmpireCounts() {
+    const all = this.getAllChannels().filter((c) => c.enabled);
+    for (const item of this.nexusempireItems) {
       item.lastUpdated = new Date().toISOString();
       if (item.id === 'alltv') {
-        item.channelCount = all.length;
+        const dedupResult = deduplicateChannelList(all, { mode: this.settings.dedupMode || 'smart', disambiguateNames: false });
+        item.channelCount = dedupResult.channels.length;
       } else {
-        const matching = this.getChannelsForAniNexusCategory(item.id);
-        item.channelCount = matching.length;
+        const { channels } = this.getChannelsForNexusEmpireCategory(item.id, true);
+        item.channelCount = channels.length;
       }
     }
   }
 
-  public getChannelsForAniNexusCategory(categoryId: string): ChannelItem[] {
-    const all = this.getAllChannels().filter((c) => c.enabled);
-    switch (categoryId) {
-      case 'zee':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return g.includes('zee') || n.startsWith('zee ') || n.includes('zeetv') || n.includes('zee cinema');
-        });
-      case 'jiiotv':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return c.sourceId === 'plugx' || g.includes('jio') || n.includes('jio');
-        });
-      case 'matchevents':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return (
-            g.includes('event') ||
-            g.includes('ipl') ||
-            g.includes('match') ||
-            g.includes('sports') ||
-            n.includes('live event') ||
-            n.includes('match') ||
-            n.includes('ipl')
-          );
-        });
-      case 'sony':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return g.includes('sony') || n.includes('sony') || n.includes('ten 1') || n.includes('ten 2') || n.includes('ten 3');
-        });
-      case 'starsports':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return g.includes('star sports') || n.includes('star sports') || n.includes('ss1') || n.includes('ss2');
-        });
-      case 'willow':
-        return all.filter((c) => {
-          const g = (c.customGroup || c.groupTitle).toLowerCase();
-          const n = (c.customName || c.name).toLowerCase();
-          return g.includes('willow') || n.includes('willow') || n.includes('cricket');
-        });
-      case 'alltv':
-      default:
-        return all;
-    }
+  private updateAniNexusCounts() {
+    this.updateNexusEmpireCounts();
   }
 
-  public getAniNexusItems(): AniNexusItem[] {
-    this.updateAniNexusCounts();
-    return this.aninexusItems;
+  /**
+   * Resolves channels for a NexusEmpire category or custom stream with intelligent deduplication:
+   * - Eliminates 100% duplicate stream URLs across sources.
+   * - Preserves distinct streams sharing the same channel name (e.g. Sony SAB HD Stream 1 vs Stream 2).
+   */
+  public getChannelsForNexusEmpireCategory(categoryIdOrSlug: string, applyDedup = true): DeduplicationResult {
+    const all = this.getAllChannels().filter((c) => c.enabled);
+    const item = this.nexusempireItems.find(
+      (i) => i.id === categoryIdOrSlug || i.slug === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug
+    );
+
+    let rawMatched: ChannelItem[] = [];
+
+    // 1. If manual channel assignments exist for this item, use them first
+    const assignedIds = this.nexusempireChannelAssignments[categoryIdOrSlug] || (item ? this.nexusempireChannelAssignments[item.id] : undefined);
+    if (assignedIds && assignedIds.length > 0) {
+      const assignedSet = new Set(assignedIds);
+      rawMatched = all.filter((c) => assignedSet.has(c.id));
+    } else {
+      // 2. Intelligent keyword and category matching
+      const targetKey = (item?.id || categoryIdOrSlug).toLowerCase();
+      const targetCategory = (item?.category || '').toLowerCase();
+
+      switch (targetKey) {
+        case 'zee':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return g.includes('zee') || n.startsWith('zee ') || n.includes('zeetv') || n.includes('zee cinema');
+          });
+          break;
+        case 'jiiotv':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return c.sourceId === 'plugx' || g.includes('jio') || n.includes('jio');
+          });
+          break;
+        case 'matchevents':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return (
+              g.includes('event') ||
+              g.includes('ipl') ||
+              g.includes('match') ||
+              g.includes('sports') ||
+              n.includes('live event') ||
+              n.includes('match') ||
+              n.includes('ipl')
+            );
+          });
+          break;
+        case 'sony':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return g.includes('sony') || n.includes('sony') || n.includes('ten 1') || n.includes('ten 2') || n.includes('ten 3');
+          });
+          break;
+        case 'starsports':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return g.includes('star sports') || n.includes('star sports') || n.includes('ss1') || n.includes('ss2');
+          });
+          break;
+        case 'willow':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return g.includes('willow') || n.includes('willow') || n.includes('cricket');
+          });
+          break;
+        case 'jiosports':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            const n = (c.customName || c.name).toLowerCase();
+            return (g.includes('jio') || n.includes('jio')) && (g.includes('sport') || n.includes('sport') || g.includes('cricket'));
+          });
+          break;
+        case 'entertainment':
+          rawMatched = all.filter((c) => {
+            const g = (c.customGroup || c.groupTitle).toLowerCase();
+            return g.includes('entertainment') || g.includes('general') || g.includes('movies');
+          });
+          break;
+        case 'alltv':
+        default:
+          if (item && item.category && item.category !== 'All TV Bouquet') {
+            rawMatched = all.filter((c) => {
+              const g = (c.customGroup || c.groupTitle).toLowerCase();
+              return g.includes(targetCategory);
+            });
+          } else {
+            rawMatched = all;
+          }
+          break;
+      }
+    }
+
+    if (!applyDedup) {
+      return {
+        channels: rawMatched,
+        stats: {
+          totalRaw: rawMatched.length,
+          exactDuplicatesRemoved: 0,
+          distinctVariantsPreserved: 0,
+          finalCleanChannels: rawMatched.length,
+        },
+      };
+    }
+
+    return deduplicateChannelList(rawMatched, {
+      mode: this.settings.dedupMode || 'smart',
+      disambiguateNames: true,
+    });
+  }
+
+  public getChannelsForAniNexusCategory(categoryId: string): ChannelItem[] {
+    return this.getChannelsForNexusEmpireCategory(categoryId, true).channels;
+  }
+
+  public getNexusEmpireItems(): NexusEmpireItem[] {
+    this.updateNexusEmpireCounts();
+    return this.nexusempireItems;
+  }
+
+  public getAniNexusItems(): NexusEmpireItem[] {
+    return this.getNexusEmpireItems();
+  }
+
+  public getNexusEmpireCategories(): { name: string; count: number }[] {
+    const catMap = new Map<string, number>();
+    for (const cat of this.nexusempireCategories) {
+      catMap.set(cat, 0);
+    }
+    for (const item of this.nexusempireItems) {
+      const cat = item.category || 'General';
+      catMap.set(cat, (catMap.get(cat) || 0) + 1);
+    }
+    return Array.from(catMap.entries()).map(([name, count]) => ({ name, count }));
+  }
+
+  public createNexusEmpireCategory(name: string): boolean {
+    const clean = name ? name.trim() : '';
+    if (!clean || this.nexusempireCategories.includes(clean)) return false;
+    this.nexusempireCategories.push(clean);
+    this.saveCustomizations();
+    return true;
+  }
+
+  public renameNexusEmpireCategory(oldName: string, newName: string): boolean {
+    const clean = newName ? newName.trim() : '';
+    if (!clean || !oldName) return false;
+    const idx = this.nexusempireCategories.indexOf(oldName);
+    if (idx !== -1) {
+      this.nexusempireCategories[idx] = clean;
+    } else {
+      this.nexusempireCategories.push(clean);
+    }
+    for (const item of this.nexusempireItems) {
+      if (item.category === oldName) {
+        item.category = clean;
+      }
+    }
+    this.saveCustomizations();
+    return true;
+  }
+
+  public addNexusEmpireItem(item: {
+    name: string;
+    uri: string;
+    slug?: string;
+    category: string;
+    logo?: string;
+    description?: string;
+  }): NexusEmpireItem {
+    const cleanSlug = (item.slug || item.name).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    const id = `nexus_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    const newItem: NexusEmpireItem = {
+      id,
+      name: item.name,
+      uri: item.uri,
+      hash: item.uri.startsWith('streambox://open/') ? item.uri.replace('streambox://open/', '') : id,
+      slug: cleanSlug,
+      m3uSlug: cleanSlug,
+      category: item.category || 'Entertainment & Movies',
+      channelCount: 0,
+      status: 'ready',
+      lastUpdated: new Date().toISOString(),
+      logo: item.logo || '/nexus-logo.png',
+      description: item.description || `Custom stream channel in NexusEmpire.`,
+      enabled: true,
+      isCustom: true,
+    };
+
+    if (!this.nexusempireCategories.includes(newItem.category)) {
+      this.nexusempireCategories.push(newItem.category);
+    }
+
+    this.nexusempireItems.push(newItem);
+    this.saveCustomizations();
+    this.updateNexusEmpireCounts();
+    return newItem;
+  }
+
+  public updateNexusEmpireItem(id: string, updates: Partial<NexusEmpireItem>): NexusEmpireItem | null {
+    const item = this.nexusempireItems.find((i) => i.id === id);
+    if (!item) return null;
+
+    if (updates.slug) {
+      updates.slug = updates.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      updates.m3uSlug = updates.slug;
+    }
+
+    if (updates.category && !this.nexusempireCategories.includes(updates.category)) {
+      this.nexusempireCategories.push(updates.category);
+    }
+
+    Object.assign(item, updates);
+    this.saveCustomizations();
+    this.updateNexusEmpireCounts();
+    return item;
+  }
+
+  public deleteNexusEmpireItem(id: string): boolean {
+    const idx = this.nexusempireItems.findIndex((i) => i.id === id);
+    if (idx !== -1) {
+      this.nexusempireItems.splice(idx, 1);
+      delete this.nexusempireChannelAssignments[id];
+      this.saveCustomizations();
+      return true;
+    }
+    return false;
+  }
+
+  public moveNexusEmpireItemsToCategory(itemIds: string[], targetCategory: string): number {
+    const cleanCat = targetCategory ? targetCategory.trim() : 'General';
+    if (!this.nexusempireCategories.includes(cleanCat)) {
+      this.nexusempireCategories.push(cleanCat);
+    }
+    let count = 0;
+    for (const id of itemIds) {
+      const item = this.nexusempireItems.find((i) => i.id === id);
+      if (item) {
+        item.category = cleanCat;
+        count++;
+      }
+    }
+    this.saveCustomizations();
+    return count;
+  }
+
+  public assignChannelsToEmpireItem(itemId: string, channelIds: string[]): boolean {
+    this.nexusempireChannelAssignments[itemId] = channelIds;
+    this.saveCustomizations();
+    this.updateNexusEmpireCounts();
+    return true;
   }
 
   public getSources(): PlaylistSource[] {
@@ -1096,6 +1366,11 @@ class PlaylistService {
     const isAnyFetching = this.sources.some((s) => s.status === 'fetching') || this.isSyncingAll;
     const hasAnyError = this.sources.some((s) => s.status === 'error');
 
+    const dedupReport = deduplicateChannelList(active, {
+      mode: this.settings.dedupMode || 'smart',
+      disambiguateNames: false,
+    });
+
     return {
       lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
       nextSyncTime: this.nextSyncTime ? this.nextSyncTime.toISOString() : null,
@@ -1110,22 +1385,33 @@ class PlaylistService {
       autoSync: this.settings.autoSync,
       publicBaseUrl: this.settings.publicBaseUrl || process.env.APP_URL || '',
       sources: this.sources,
-      aninexus: this.getAniNexusItems(),
+      nexusempire: this.getNexusEmpireItems(),
+      aninexus: this.getNexusEmpireItems(),
+      dedupMode: this.settings.dedupMode || 'smart',
+      dedupStats: dedupReport.stats,
     };
   }
 
   /**
    * Generates M3U playlist file for a specific source OR all sources combined
+   * with intelligent deduplication to prevent repeated streams.
    */
   public generateM3U(sourceIdOrSlug?: string, filterGroup?: string): string {
     const isAll = !sourceIdOrSlug || sourceIdOrSlug === 'all';
     const src = !isAll ? this.getSourceBySlugOrId(sourceIdOrSlug) : undefined;
     const targetId = src ? src.id : sourceIdOrSlug;
 
-    const channels = this.getAllChannels(isAll ? undefined : targetId).filter((c) => c.enabled);
+    const rawChannels = this.getAllChannels(isAll ? undefined : targetId).filter((c) => c.enabled);
     const filtered = filterGroup
-      ? channels.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
-      : channels;
+      ? rawChannels.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
+      : rawChannels;
+
+    // Apply intelligent stream deduplication (removes true duplicate streams while preserving distinct streams with the same name)
+    const dedupResult = deduplicateChannelList(filtered, {
+      mode: this.settings.dedupMode || 'smart',
+      disambiguateNames: true,
+    });
+    const channels = dedupResult.channels;
 
     let header = '#EXTM3U';
     if (!isAll && targetId && this.sourceHeaders[targetId]?.length > 0) {
@@ -1142,12 +1428,13 @@ class PlaylistService {
     }
 
     const lines: string[] = [header];
-    const sourceLabel = isAll ? 'ALL COMBINED SOURCES (CARTEL 187 MASTER)' : (src?.name || targetId);
-    lines.push(`# Cartel 187 Multi-Playlist Relay Studio | ${new Date().toISOString()}`);
-    lines.push(`# Playlist Source: ${sourceLabel}`);
-    lines.push(`# Total Channels: ${filtered.length}`);
+    const sourceLabel = isAll ? 'ALL SOURCES (NEXUS UNIFIED STREAM ENGINE)' : (src?.name || targetId);
+    lines.push(`# Nexus Multi-Playlist Relay Engine | Generated: ${new Date().toISOString()}`);
+    lines.push(`# Stream Source: ${sourceLabel}`);
+    lines.push(`# Deduplication Mode: ${this.settings.dedupMode || 'smart'} (Removed: ${dedupResult.stats.exactDuplicatesRemoved} duplicates)`);
+    lines.push(`# Total Channels: ${channels.length}`);
 
-    for (const ch of filtered) {
+    for (const ch of channels) {
       const displayName = ch.customName || ch.name;
       const groupTitle = ch.customGroup || ch.groupTitle || 'General';
       const logo = ch.customLogo || ch.tvgLogo || '';
@@ -1199,19 +1486,24 @@ class PlaylistService {
   }
 
   /**
-   * Generates M3U playlist for AniNexus sections (Zee, JioTV, Match Events, Sony, Star Sports, Willow, All TV)
+   * Generates M3U playlist for NexusEmpire sections with intelligent cross-category deduplication
+   * so streams NEVER repeat in all.m3u or category playlists.
    */
-  public generateAniNexusM3U(categoryIdOrSlug?: string): string {
+  public generateNexusEmpireM3U(categoryIdOrSlug?: string): string {
     const isAll = !categoryIdOrSlug || categoryIdOrSlug === 'all' || categoryIdOrSlug === 'alltv';
     const lines: string[] = [
       '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz" refresh="1800"',
-      `# AniNexus by Cartel 187 | Engine for AniTv & StreamBox`,
+      `# NexusEmpire Stream Engine by Nexus | For AniTv & StreamBox`,
       `# Generated: ${new Date().toISOString()}`,
+      `# Deduplication: Active (Smart disambiguation for multi-stream variants)`,
     ];
 
     const targetCategories = isAll
-      ? this.aninexusItems.filter((i) => i.id !== 'alltv')
-      : this.aninexusItems.filter((i) => i.id === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug);
+      ? this.nexusempireItems.filter((i) => i.id !== 'alltv' && i.enabled)
+      : this.nexusempireItems.filter((i) => (i.id === categoryIdOrSlug || i.slug === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug) && i.enabled);
+
+    // Track streams emitted in all.m3u to avoid cross-category repetition
+    const seenGlobalStreams = new Set<string>();
 
     for (const item of targetCategories) {
       lines.push('');
@@ -1220,18 +1512,29 @@ class PlaylistService {
       lines.push(`# Deep-link: ${item.uri}`);
       lines.push(`# ============================================================`);
 
-      // 1. First add the primary AniTv StreamBox deep-link channel
+      // 1. Primary AniTv StreamBox deep-link channel
       lines.push(
-        `#EXTINF:-1 tvg-id="aninexus_${item.id}" tvg-name="${item.name}" tvg-logo="${item.logo}" group-title="AniNexus | ${item.name}" group-logo="${item.logo}",★ ${item.name} (AniTv Direct)`
+        `#EXTINF:-1 tvg-id="nexusempire_${item.id}" tvg-name="${item.name}" tvg-logo="${item.logo}" group-title="NexusEmpire | ${item.name}" group-logo="${item.logo}",★ ${item.name} (AniTv Direct)`
       );
       lines.push(item.uri);
 
-      // 2. Add all matched live channels for this category from the master relay pool
-      const matchingChannels = this.getChannelsForAniNexusCategory(item.id);
-      for (const ch of matchingChannels) {
+      // 2. Add matched live channels with deduplication
+      const { channels } = this.getChannelsForNexusEmpireCategory(item.id, true);
+      for (const ch of channels) {
         if (!ch.enabled) continue;
+
+        const rawUrl = ch.customUrl || ch.url;
+        const normUrl = normalizeStreamUrl(rawUrl);
+        const streamSig = `${normUrl}::${ch.clearKeySnippet || ''}`;
+
+        // In combined all.m3u, skip stream if already present in an earlier category
+        if (isAll && seenGlobalStreams.has(streamSig)) {
+          continue;
+        }
+        seenGlobalStreams.add(streamSig);
+
         const displayName = ch.customName || ch.name;
-        const groupTitle = `AniNexus | ${item.name}`;
+        const groupTitle = `NexusEmpire | ${item.name}`;
         const logo = ch.customLogo || ch.tvgLogo || item.logo;
         const tvgId = ch.tvgId || ch.id;
 
@@ -1255,46 +1558,60 @@ class PlaylistService {
           for (const d of ch.directives) lines.push(d);
         }
 
-        lines.push(ch.customUrl || ch.url);
+        lines.push(rawUrl);
       }
     }
 
     return lines.join('\n');
   }
 
+  public generateAniNexusM3U(categoryIdOrSlug?: string): string {
+    return this.generateNexusEmpireM3U(categoryIdOrSlug);
+  }
+
   /**
-   * Generates structured JSON representation for AniNexus
+   * Generates structured JSON representation for NexusEmpire
    */
-  public generateAniNexusJSON(categoryIdOrSlug?: string) {
+  public generateNexusEmpireJSON(categoryIdOrSlug?: string) {
     const isAll = !categoryIdOrSlug || categoryIdOrSlug === 'all' || categoryIdOrSlug === 'alltv';
     const targetCategories = isAll
-      ? this.aninexusItems
-      : this.aninexusItems.filter((i) => i.id === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug);
+      ? this.nexusempireItems
+      : this.nexusempireItems.filter((i) => i.id === categoryIdOrSlug || i.slug === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug);
 
     return {
-      service: 'AniNexus by Cartel 187',
-      client: 'AniTv & StreamBox',
+      service: 'NexusEmpire Engine by Nexus',
+      client: 'AniTv & StreamBox Hub',
       generatedAt: new Date().toISOString(),
       syncIntervalMinutes: 30,
-      categories: targetCategories.map((item) => ({
-        id: item.id,
-        name: item.name,
-        category: item.category,
-        deepLink: item.uri,
-        hash: item.hash,
-        logo: item.logo,
-        m3uUrl: `/api/aninexus/${item.m3uSlug}.m3u`,
-        jsonUrl: `/api/aninexus/${item.m3uSlug}.json`,
-        channelCount: item.channelCount,
-        channels: this.getChannelsForAniNexusCategory(item.id).map((c) => ({
-          id: c.id,
-          name: c.customName || c.name,
-          logo: c.customLogo || c.tvgLogo,
-          streamUrl: c.customUrl || c.url,
-          hasClearKey: !!c.hasClearKey,
-        })),
-      })),
+      categories: targetCategories.map((item) => {
+        const { channels, stats } = this.getChannelsForNexusEmpireCategory(item.id, true);
+        return {
+          id: item.id,
+          name: item.name,
+          slug: item.slug || item.m3uSlug,
+          category: item.category,
+          deepLink: item.uri,
+          hash: item.hash,
+          logo: item.logo,
+          m3uUrl: `/api/nexusempire/${item.slug || item.m3uSlug}.m3u`,
+          jsonUrl: `/api/nexusempire/${item.slug || item.m3uSlug}.json`,
+          channelCount: channels.length,
+          dedupStats: stats,
+          channels: channels.map((c) => ({
+            id: c.id,
+            name: c.customName || c.name,
+            logo: c.customLogo || c.tvgLogo,
+            streamUrl: c.customUrl || c.url,
+            hasClearKey: !!c.hasClearKey,
+            streamVariant: c.streamVariant || 1,
+          })),
+        };
+      }),
     };
+  }
+
+  public generateAniNexusJSON(categoryIdOrSlug?: string) {
+    return this.generateNexusEmpireJSON(categoryIdOrSlug);
   }
 
   /**
