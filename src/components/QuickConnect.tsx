@@ -136,8 +136,9 @@ export const QuickConnect: React.FC<QuickConnectProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {sources.map((src) => {
-            const m3uUrl = `${origin}/api/playlist/${src.id}.m3u`;
-            const jsonUrl = `${origin}/api/playlist/${src.id}.json`;
+            const slug = src.slug || src.id;
+            const m3uUrl = `${origin}/api/playlist/${slug}.m3u`;
+            const jsonUrl = `${origin}/api/playlist/${slug}.json`;
 
             return (
               <div
@@ -159,7 +160,7 @@ export const QuickConnect: React.FC<QuickConnectProps> = ({
                       </div>
                     </div>
                     <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">
-                      /{src.id}.m3u
+                      /{slug}.m3u
                     </span>
                   </div>
 
@@ -192,7 +193,7 @@ export const QuickConnect: React.FC<QuickConnectProps> = ({
                   </div>
 
                   <a
-                    href={`/api/playlist/${src.id}.m3u`}
+                    href={`/api/playlist/${slug}.m3u`}
                     download={`${src.id}.m3u`}
                     className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
                     title="Download .m3u"

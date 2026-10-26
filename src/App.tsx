@@ -5,19 +5,31 @@ import {
   FileCode,
   Settings,
   Sparkles,
-  CheckCircle,
+  Radio,
+  Upload,
 } from 'lucide-react';
 import { Header } from './components/Header';
+import { VideoBackground } from './components/VideoBackground';
+import { ToastContainer } from './components/ToastContainer';
 import { QuickConnect } from './components/QuickConnect';
 import { ChannelList } from './components/ChannelList';
 import { GroupManager } from './components/GroupManager';
+import { AniNexusView } from './components/AniNexusView';
 import { RawInspector } from './components/RawInspector';
 import { ChannelModal } from './components/ChannelModal';
 import { AddChannelModal } from './components/AddChannelModal';
 import { StreamPlayerModal } from './components/StreamPlayerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { PlaylistSourcesModal } from './components/PlaylistSourcesModal';
-import { ChannelItem, GroupInfo, SyncStatus, PlaylistSettings, PlaylistSource } from './types';
+import { UploadM3UModal } from './components/UploadM3UModal';
+import {
+  ChannelItem,
+  GroupInfo,
+  SyncStatus,
+  PlaylistSettings,
+  PlaylistSource,
+  ToastItem,
+} from './types';
 
 export default function App() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
@@ -34,10 +46,12 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'raw'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'aninexus' | 'raw'>('channels');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState<boolean>(true);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Modern Toast System
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   // Modals state
   const [editingChannel, setEditingChannel] = useState<ChannelItem | null>(null);
@@ -45,6 +59,7 @@ export default function App() {
   const [previewingChannel, setPreviewingChannel] = useState<ChannelItem | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isSourcesOpen, setIsSourcesOpen] = useState<boolean>(false);
+  const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
 
   const [settings, setSettings] = useState<PlaylistSettings>({
     syncIntervalMinutes: 30,
@@ -54,11 +69,28 @@ export default function App() {
     publicBaseUrl: '',
     zeotvStripSuffix: true,
     zeotvRemoveGroupLogo: true,
+    appTitle: 'Cartel 187',
   });
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+  const notify = (
+    type: 'success' | 'error' | 'info' | 'loading',
+    title: string,
+    message?: string,
+    duration = 3500
+  ) => {
+    const id = `toast_${Date.now()}_${Math.random()}`;
+    const newToast: ToastItem = { id, type, title, message, duration };
+    setToasts((prev) => [...prev, newToast]);
+
+    if (duration > 0) {
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, duration);
+    }
+  };
+
+  const dismissToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
   const fetchStatus = useCallback(async () => {
@@ -193,20 +225,21 @@ export default function App() {
   // Sync actions
   const handleSyncNow = async () => {
     setIsSyncing(true);
+    notify('loading', 'Syncing Playlists...', 'Refreshing live stream tokens, cookies, and DRM keys');
     try {
       const res = await fetch('/api/sync', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        showToast(data.message || 'Synced all sources successfully!');
+        notify('success', 'Sync Complete!', data.message || 'All sources refreshed');
       } else {
-        showToast(`Sync alert: ${data.message}`);
+        notify('error', 'Sync Warning', data.message);
       }
       await fetchStatus();
       await fetchSources();
       await fetchGroups(selectedSource);
       await fetchChannels(currentPage, selectedSource);
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      notify('error', 'Sync Failed', err.message);
     } finally {
       setIsSyncing(false);
     }
@@ -217,17 +250,17 @@ export default function App() {
       const url = sourceId ? `/api/sync?sourceId=${encodeURIComponent(sourceId)}` : '/api/sync';
       const res = await fetch(url, { method: 'POST' });
       const data = await res.json();
-      showToast(data.message || 'Source synced');
+      notify('success', 'Playlist Synced', data.message || 'Source refreshed');
       await fetchStatus();
       await fetchSources();
       await fetchChannels(currentPage, selectedSource);
     } catch (err: any) {
-      showToast(`Error: ${err.message}`);
+      notify('error', 'Sync Error', err.message);
     }
   };
 
   // Source CRUD
-  const handleAddSource = async (source: { name: string; url: string; id?: string }) => {
+  const handleAddSource = async (source: { name: string; url: string; id?: string; slug?: string }) => {
     try {
       const res = await fetch('/api/sources', {
         method: 'POST',
@@ -235,13 +268,13 @@ export default function App() {
         body: JSON.stringify(source),
       });
       if (res.ok) {
-        showToast(`Added playlist "${source.name}"`);
+        notify('success', 'Source Added', `Registered playlist "${source.name}"`);
         await fetchSources();
         await fetchStatus();
         await fetchChannels(1, selectedSource);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Add Failed', err.message);
     }
   };
 
@@ -253,13 +286,14 @@ export default function App() {
         body: JSON.stringify(updates),
       });
       if (res.ok) {
-        showToast('Playlist source updated');
+        const data = await res.json();
+        notify('success', 'Playlist Updated', `Updated "${data.source?.name}"`);
         await fetchSources();
         await fetchStatus();
         await fetchChannels(currentPage, selectedSource);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Update Error', err.message);
     }
   };
 
@@ -267,7 +301,7 @@ export default function App() {
     try {
       const res = await fetch(`/api/sources/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        showToast('Playlist source removed');
+        notify('success', 'Playlist Removed', 'Source deleted');
         if (selectedSource === id) {
           setSelectedSource('all');
         }
@@ -275,8 +309,8 @@ export default function App() {
         await fetchStatus();
         await fetchChannels(1, 'all');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Delete Error', err.message);
     }
   };
 
@@ -300,6 +334,24 @@ export default function App() {
     }
   };
 
+  const handleBulkToggleChannels = async (channelIds: string[], enabled: boolean) => {
+    try {
+      const res = await fetch('/api/channels/bulk-toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelIds, enabled }),
+      });
+      if (res.ok) {
+        notify('success', enabled ? 'Channels Enabled' : 'Channels Disabled', `Updated ${channelIds.length} channels`);
+        fetchChannels(currentPage, selectedSource);
+        fetchGroups(selectedSource);
+        fetchStatus();
+      }
+    } catch (err: any) {
+      notify('error', 'Bulk Update Error', err.message);
+    }
+  };
+
   const handleSaveChannel = async (id: string, updates: any) => {
     try {
       const res = await fetch(`/api/channels/${id}`, {
@@ -308,12 +360,12 @@ export default function App() {
         body: JSON.stringify(updates),
       });
       if (res.ok) {
-        showToast('Channel updated successfully!');
+        notify('success', 'Channel Updated', 'Channel attributes saved');
         fetchChannels(currentPage, selectedSource);
         fetchGroups(selectedSource);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Save Error', err.message);
     }
   };
 
@@ -321,12 +373,12 @@ export default function App() {
     try {
       const res = await fetch(`/api/channels/reset/${id}`, { method: 'POST' });
       if (res.ok) {
-        showToast('Reset channel to upstream default!');
+        notify('success', 'Channel Reset', 'Restored upstream default settings');
         fetchChannels(currentPage, selectedSource);
         fetchGroups(selectedSource);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Reset Error', err.message);
     }
   };
 
@@ -338,13 +390,13 @@ export default function App() {
         body: JSON.stringify(newChannel),
       });
       if (res.ok) {
-        showToast('Custom channel added!');
+        notify('success', 'Channel Created', `Added ${newChannel.name}`);
         fetchChannels(1, selectedSource);
         fetchGroups(selectedSource);
         fetchStatus();
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Add Channel Error', err.message);
     }
   };
 
@@ -357,12 +409,12 @@ export default function App() {
         body: JSON.stringify({ oldName, newName }),
       });
       if (res.ok) {
-        showToast(`Renamed group to "${newName}"`);
+        notify('success', 'Category Renamed', `Renamed to "${newName}"`);
         fetchGroups(selectedSource);
         fetchChannels(currentPage, selectedSource);
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Rename Error', err.message);
     }
   };
 
@@ -374,13 +426,34 @@ export default function App() {
         body: JSON.stringify({ groupName, visible }),
       });
       if (res.ok) {
-        showToast(`${visible ? 'Enabled' : 'Hidden'} channels in "${groupName}"`);
+        notify('success', visible ? 'Category Enabled' : 'Category Hidden', `${visible ? 'Active' : 'Muted'} "${groupName}"`);
         fetchGroups(selectedSource);
         fetchChannels(currentPage, selectedSource);
         fetchStatus();
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Toggle Error', err.message);
+    }
+  };
+
+  const handleBulkSetGroupLogo = async (groupNames: string[], logoUrl: string) => {
+    try {
+      const res = await fetch('/api/groups/bulk-logo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupNames, logoUrl }),
+      });
+      if (res.ok) {
+        notify(
+          'success',
+          logoUrl ? 'Logos Applied' : 'Logos Cleared',
+          `Updated logo across ${groupNames.length} categories`
+        );
+        fetchGroups(selectedSource);
+        fetchChannels(currentPage, selectedSource);
+      }
+    } catch (err: any) {
+      notify('error', 'Bulk Logo Error', err.message);
     }
   };
 
@@ -403,23 +476,6 @@ export default function App() {
     return 0;
   };
 
-  const handleBulkSetGroupLogo = async (groupNames: string[], logoUrl: string) => {
-    try {
-      const res = await fetch('/api/groups/bulk-logo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupNames, logoUrl }),
-      });
-      if (res.ok) {
-        showToast(logoUrl ? `Updated logo for ${groupNames.length} categories!` : `Cleared logo for ${groupNames.length} categories!`);
-        fetchGroups(selectedSource);
-        fetchChannels(currentPage, selectedSource);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   // Settings & Backup Actions
   const handleSaveSettings = async (newSettings: Partial<PlaylistSettings>) => {
     try {
@@ -432,10 +488,10 @@ export default function App() {
         const data = await res.json();
         setSettings(data.settings);
         fetchStatus();
-        showToast('Settings saved!');
+        notify('success', 'Settings Saved', 'Configuration updated');
       }
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      notify('error', 'Settings Error', err.message);
     }
   };
 
@@ -453,7 +509,7 @@ export default function App() {
       const err = await res.json();
       throw new Error(err.error || 'Failed to import');
     }
-    showToast('Backup restored successfully!');
+    notify('success', 'Backup Restored', 'All playlists and settings restored');
     fetchStatus();
     fetchSources();
     fetchGroups(selectedSource);
@@ -461,14 +517,12 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
-      {/* Toast Alert */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 border border-cyan-500/80 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs animate-slideUp">
-          <CheckCircle className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
+    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+      {/* Ambient Video Background */}
+      <VideoBackground />
+
+      {/* Floating Modern Non-Browser Toast Popups */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       {/* App Header */}
       <Header
@@ -477,10 +531,13 @@ export default function App() {
         onSync={handleSyncNow}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenSources={() => setIsSourcesOpen(true)}
+        onOpenUpload={() => setIsUploadOpen(true)}
+        activeTab={activeTab}
+        onSelectTab={(t) => setActiveTab(t)}
       />
 
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      {/* Main Content Area */}
+      <main className="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* Quick Connect IPTV Banner */}
         <QuickConnect
           totalChannels={status?.totalChannels || 0}
@@ -491,14 +548,14 @@ export default function App() {
         />
 
         {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 p-1 rounded-xl">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-2xl backdrop-blur-xl">
             <button
               onClick={() => setActiveTab('channels')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'channels'
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <Tv className="w-4 h-4" />
@@ -507,44 +564,57 @@ export default function App() {
 
             <button
               onClick={() => setActiveTab('groups')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'groups'
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <Layers className="w-4 h-4" />
               <span>Categories ({groups.length})</span>
             </button>
 
+            {/* AniNexus Dedicated Tab */}
+            <button
+              onClick={() => setActiveTab('aninexus')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'aninexus'
+                  ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
+                  : 'text-indigo-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Radio className="w-4 h-4 text-indigo-400" />
+              <span>AniNexus (AniTv &amp; StreamBox)</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('raw')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                 activeTab === 'raw'
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
               <FileCode className="w-4 h-4" />
-              <span>Live M3U &amp; JSON Preview</span>
+              <span>Live M3U &amp; JSON</span>
             </button>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsSourcesOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-cyan-800/60 hover:border-cyan-600 text-cyan-300 text-xs font-medium transition-colors"
+              onClick={() => setIsUploadOpen(true)}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-indigo-500/40 hover:border-indigo-400 text-indigo-300 hover:text-white text-xs font-semibold transition-colors"
             >
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span>Manage Playlists ({sources.length})</span>
+              <Upload className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Upload .M3U</span>
             </button>
 
             <button
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-medium transition-colors"
+              onClick={() => setIsSourcesOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-cyan-800/60 hover:border-cyan-600 text-cyan-300 text-xs font-semibold transition-colors"
             >
-              <Settings className="w-4 h-4 text-slate-400" />
-              <span>Settings</span>
+              <Layers className="w-4 h-4 text-cyan-400" />
+              <span>Playlists &amp; Slugs ({sources.length})</span>
             </button>
           </div>
         </div>
@@ -570,6 +640,7 @@ export default function App() {
             onStatusChange={handleStatusChange}
             onPageChange={handlePageChange}
             onToggleChannel={handleToggleChannel}
+            onBulkToggleChannels={handleBulkToggleChannels}
             onEditChannel={(ch) => setEditingChannel(ch)}
             onResetChannel={handleResetChannel}
             onAddChannel={() => setIsAddChannelOpen(true)}
@@ -592,17 +663,26 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'aninexus' && (
+          <AniNexusView
+            onNotify={notify}
+            publicBaseUrl={settings.publicBaseUrl}
+            onPreviewChannel={(ch) => setPreviewingChannel(ch)}
+          />
+        )}
+
         {activeTab === 'raw' && <RawInspector sources={sources} />}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950/80 py-6 text-center text-xs text-slate-400">
+      <footer className="relative z-10 border-t border-slate-900 bg-slate-950/90 py-6 text-center text-xs text-slate-400 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p>
-            IPTV Multi-Playlist Relay Studio · Auto-refreshing all sources every {status?.syncIntervalMinutes || 30} minutes
+          <p className="flex items-center gap-2">
+            <span className="font-bold text-white tracking-wide">CARTEL 187</span>
+            <span>· Auto-refreshing all streams &amp; AniNexus feeds every {status?.syncIntervalMinutes || 30} minutes</span>
           </p>
           <p className="text-slate-400">
-            Engineered for <span className="text-slate-300">OTT Navigator</span>, <span className="text-slate-300">TiviMate</span> &amp; <span className="text-slate-300">Kodi</span>
+            Engineered for <span className="text-cyan-300 font-semibold">OTT Navigator</span>, <span className="text-cyan-300 font-semibold">TiviMate</span>, <span className="text-indigo-300 font-semibold">AniTv</span> &amp; <span className="text-slate-200">StreamBox</span>
           </p>
         </div>
       </footer>
@@ -651,6 +731,22 @@ export default function App() {
           onUpdateSource={handleUpdateSource}
           onDeleteSource={handleDeleteSource}
           onSyncSource={handleSyncSource}
+          onOpenUploadModal={() => {
+            setIsSourcesOpen(false);
+            setIsUploadOpen(true);
+          }}
+        />
+      )}
+
+      {isUploadOpen && (
+        <UploadM3UModal
+          onClose={() => setIsUploadOpen(false)}
+          onUploaded={({ name, m3uUrl }) => {
+            notify('success', 'Uploaded & Hosted!', `Playlist "${name}" is live at ${m3uUrl}`);
+            fetchSources();
+            fetchStatus();
+            fetchChannels(1, selectedSource);
+          }}
         />
       )}
     </div>

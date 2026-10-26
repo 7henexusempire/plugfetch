@@ -1,6 +1,6 @@
 {
-  "name": "IPTV Stream Relay & Playlist Studio",
-  "description": "High-performance playlist fetcher and M3U/JSON generator for OTT Navigator, TiviMate, and IPTV players with 30-minute auto-refresh and channel customization.",
+  "name": "Cartel 187",
+  "description": "Cartel 187 IPTV Relay & AniNexus Studio - Multi-Playlist Stream Processor, M3U Hosting, AniTv Streambox Bridge, and OTT/TiviMate Hub.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

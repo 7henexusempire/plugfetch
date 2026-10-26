@@ -1,54 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-
-export interface PlaylistSource {
-  id: string; // e.g. 'plugx', 'server-lrl45', 'zeotv'
-  name: string;
-  url: string;
-  enabled: boolean;
-  lastSyncTime: string | null;
-  status: 'idle' | 'fetching' | 'success' | 'error';
-  errorMessage: string | null;
-  channelCount: number;
-}
-
-export interface ChannelItem {
-  id: string;
-  sourceId: string;
-  tvgId: string;
-  tvgName: string;
-  tvgLogo: string;
-  tvgCategory: string;
-  groupTitle: string;
-  groupLogo?: string;
-  type?: string;
-  tvgChno?: string;
-  name: string;
-  url: string;
-  preDirectives: string[];
-  postDirectives: string[];
-  directives: string[];
-  hasClearKey?: boolean;
-  clearKeySnippet?: string;
-  customName?: string;
-  customGroup?: string;
-  customLogo?: string;
-  customGroupLogo?: string;
-  customChno?: string;
-  customUrl?: string;
-  enabled: boolean;
-  isCustom?: boolean;
-}
-
-export interface PlaylistSettings {
-  syncIntervalMinutes: number;
-  autoSync: boolean;
-  userAgent: string;
-  customTvgUrl: string;
-  publicBaseUrl: string;
-  zeotvStripSuffix: boolean;
-  zeotvRemoveGroupLogo: boolean;
-}
+import {
+  PlaylistSource,
+  AniNexusItem,
+  ChannelItem,
+  PlaylistSettings,
+} from '../types';
 
 export interface CustomizationData {
   sources: PlaylistSource[];
@@ -62,10 +19,11 @@ export interface CustomizationData {
     enabled?: boolean;
   }>;
   groupRenames: Record<string, string>;
-  groupLogos: Record<string, string>; // Bulk group logos
+  groupLogos: Record<string, string>;
   groupVisibility: Record<string, boolean>;
   customChannels: ChannelItem[];
   settings: PlaylistSettings;
+  aninexusOverrides?: Record<string, { enabled?: boolean; customName?: string }>;
 }
 
 export interface GlobalSyncStatus {
@@ -80,17 +38,21 @@ export interface GlobalSyncStatus {
   autoSync: boolean;
   publicBaseUrl: string;
   sources: PlaylistSource[];
+  aninexus: AniNexusItem[];
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.resolve(process.cwd(), 'data');
+const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 const CACHE_FILE = path.join(DATA_DIR, 'playlist-multi-cache.json');
 const CUSTOMIZATIONS_FILE = path.join(DATA_DIR, 'customizations.json');
 
 const DEFAULT_SOURCES: PlaylistSource[] = [
   {
     id: 'plugx',
-    name: 'Plugx VIP Playlist',
+    slug: 'cartelx',
+    name: 'CartelX VIP (Plugx)',
     url: 'https://plugxvipplaylist.lovable.app/api/playlist',
+    type: 'remote',
     enabled: true,
     lastSyncTime: null,
     status: 'idle',
@@ -99,8 +61,10 @@ const DEFAULT_SOURCES: PlaylistSource[] = [
   },
   {
     id: 'server-lrl45',
+    slug: 'vaathala',
     name: 'Vaathala & Hotstar Live',
     url: 'https://server.lrl45.workers.dev/channel/raw?=m3u',
+    type: 'remote',
     enabled: true,
     lastSyncTime: null,
     status: 'idle',
@@ -109,13 +73,116 @@ const DEFAULT_SOURCES: PlaylistSource[] = [
   },
   {
     id: 'zeotv',
+    slug: 'zeotv',
     name: 'SunNXT & StreamX Live',
     url: 'https://zeotvyash.streamxlivenow.workers.dev/',
+    type: 'remote',
     enabled: true,
     lastSyncTime: null,
     status: 'idle',
     errorMessage: null,
     channelCount: 0,
+  },
+];
+
+export const DEFAULT_ANINEXUS: AniNexusItem[] = [
+  {
+    id: 'zee',
+    name: 'Zee Network Live',
+    uri: 'streambox://open/8003bfd97ec3d87c8df2280494c3aa26',
+    hash: '8003bfd97ec3d87c8df2280494c3aa26',
+    m3uSlug: 'zee',
+    category: 'Zee Entertainment & Movies',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://img.youtube.com/vi/q1jQ5jT8rG8/hqdefault.jpg',
+    description: 'Zee Cinema, Zee TV HD, Zee Bangla, Zee Telugu and regional network streams for AniTv & StreamBox.',
+    enabled: true,
+  },
+  {
+    id: 'jiiotv',
+    name: 'JioTV Live Plus',
+    uri: 'streambox://open/67e9bdf279c6a6a31d59927595346d28',
+    hash: '67e9bdf279c6a6a31d59927595346d28',
+    m3uSlug: 'jiiotv',
+    category: 'JioTV & Cinema Live',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://jiotv.catchup.cdn.jio.com/dare_images/images/Jio_Cinema.png',
+    description: 'Direct JioTV live multiplex streams with tokenized session parameters.',
+    enabled: true,
+  },
+  {
+    id: 'matchevents',
+    name: 'Match Events Live',
+    uri: 'streambox://open/dbd3d88df5fe1594d5d64afb3b6704be',
+    hash: 'dbd3d88df5fe1594d5d64afb3b6704be',
+    m3uSlug: 'matchevents',
+    category: 'Live Sports & Match Events',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://i.postimg.cc/bw0XwT8D/Jio-Hotstar-OG.png',
+    description: 'Cricket, Football, Tennis, Formula 1, and pop-up tournament event feeds.',
+    enabled: true,
+  },
+  {
+    id: 'sony',
+    name: 'Sony Network (SonyLIV)',
+    uri: 'streambox://open/4397be6aa83e687053eeb1f55b4f9f48',
+    hash: '4397be6aa83e687053eeb1f55b4f9f48',
+    m3uSlug: 'sony',
+    category: 'Sony Pictures Networks',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://img.youtube.com/vi/8s6z0Y2uPek/hqdefault.jpg',
+    description: 'Sony Ten 1/2/3/4/5 HD, Sony BBC Earth, Sony SAB, Sony MAX HD streams.',
+    enabled: true,
+  },
+  {
+    id: 'starsports',
+    name: 'Star Sports Hub',
+    uri: 'streambox://open/e5431b6490c23efb29dda4133190826c',
+    hash: 'e5431b6490c23efb29dda4133190826c',
+    m3uSlug: 'starsports',
+    category: 'Star Sports Network',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://i.ibb.co/YBMBDWtd/SS2HD-HINDI.jpg',
+    description: 'Star Sports 1, Star Sports Select HD, Star Sports Hindi, Tamil, Telugu feeds.',
+    enabled: true,
+  },
+  {
+    id: 'willow',
+    name: 'Willow TV Cricket',
+    uri: 'streambox://open/255cfab9f98da87dab11a6e0a337279e',
+    hash: '255cfab9f98da87dab11a6e0a337279e',
+    m3uSlug: 'willow',
+    category: 'Willow Cricket HD',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ32BfOcij5y0NkYztgiMZ3AFXmBjXlAIYiuKm2U49BBLqpI4ZWuR92-LA&s=10',
+    description: '24/7 dedicated cricket broadcast channel for AniTv & Streambox.',
+    enabled: true,
+  },
+  {
+    id: 'alltv',
+    name: 'All TV Channels (Master)',
+    uri: 'streambox://open/188140cf39bd8728cfa2f19290218e2b',
+    hash: '188140cf39bd8728cfa2f19290218e2b',
+    m3uSlug: 'alltv',
+    category: 'AniNexus Unified Bouquet',
+    channelCount: 0,
+    status: 'ready',
+    lastUpdated: null,
+    logo: 'https://anivortex.in/images/anivortex_logo_transparent.webp',
+    description: 'Comprehensive AniNexus catalog combining all categories and channels into one master playlist.',
+    enabled: true,
   },
 ];
 
@@ -127,10 +194,12 @@ const DEFAULT_SETTINGS: PlaylistSettings = {
   publicBaseUrl: '',
   zeotvStripSuffix: true,
   zeotvRemoveGroupLogo: true,
+  appTitle: 'Cartel 187',
 };
 
 class PlaylistService {
   private sources: PlaylistSource[] = [...DEFAULT_SOURCES];
+  private aninexusItems: AniNexusItem[] = [...DEFAULT_ANINEXUS];
   private sourceHeaders: Record<string, string[]> = {};
   private channelsBySource: Record<string, ChannelItem[]> = {};
   private settings: PlaylistSettings = { ...DEFAULT_SETTINGS };
@@ -147,17 +216,19 @@ class PlaylistService {
   private isInitialized = false;
 
   constructor() {
-    this.ensureDataDir();
+    this.ensureDirs();
     this.loadCustomizations();
     this.loadCache();
   }
 
-  private ensureDataDir() {
-    if (!fs.existsSync(DATA_DIR)) {
-      try {
-        fs.mkdirSync(DATA_DIR, { recursive: true });
-      } catch (err) {
-        console.error('Failed to create data directory:', err);
+  private ensureDirs() {
+    for (const d of [DATA_DIR, UPLOADS_DIR]) {
+      if (!fs.existsSync(d)) {
+        try {
+          fs.mkdirSync(d, { recursive: true });
+        } catch (err) {
+          console.error(`Failed to create dir ${d}:`, err);
+        }
       }
     }
   }
@@ -171,11 +242,11 @@ class PlaylistService {
           const loadedMap = new Map(data.sources.map((s) => [s.id, s]));
           this.sources = DEFAULT_SOURCES.map((def) => {
             const saved = loadedMap.get(def.id);
-            return saved ? { ...def, ...saved } : def;
+            return saved ? { ...def, ...saved, slug: saved.slug || def.slug } : def;
           });
           for (const s of data.sources) {
             if (!this.sources.some((x) => x.id === s.id)) {
-              this.sources.push(s);
+              this.sources.push({ ...s, slug: s.slug || s.id });
             }
           }
         }
@@ -197,7 +268,7 @@ class PlaylistService {
   }
 
   private saveCustomizations() {
-    this.ensureDataDir();
+    this.ensureDirs();
     try {
       const data: CustomizationData = {
         sources: this.sources,
@@ -228,6 +299,7 @@ class PlaylistService {
             src.channelCount = chs.length;
           }
           this.applyCustomizations();
+          this.updateAniNexusCounts();
         }
       }
     } catch (err) {
@@ -236,7 +308,7 @@ class PlaylistService {
   }
 
   private saveCache() {
-    this.ensureDataDir();
+    this.ensureDirs();
     try {
       const cache = {
         lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
@@ -278,7 +350,7 @@ class PlaylistService {
     this.nextSyncTime = new Date(Date.now() + intervalMs);
 
     this.syncTimer = setInterval(async () => {
-      console.log(`[Sync Worker] Auto-syncing all sources at ${new Date().toISOString()}`);
+      console.log(`[Cartel 187 Sync Worker] Auto-syncing all sources & AniNexus at ${new Date().toISOString()}`);
       await this.fetchAllSources();
       this.nextSyncTime = new Date(Date.now() + intervalMs);
     }, intervalMs);
@@ -287,33 +359,46 @@ class PlaylistService {
   public async fetchSingleSource(sourceId: string): Promise<{ success: boolean; message: string; count: number }> {
     const src = this.sources.find((s) => s.id === sourceId);
     if (!src) {
-      return { success: false, message: `Source with ID "${sourceId}" not found`, count: 0 };
+      return { success: false, message: `Source "${sourceId}" not found`, count: 0 };
+    }
+
+    // If source is disabled, keep existing channels or mark idle
+    if (!src.enabled) {
+      return { success: true, message: `Source "${src.name}" is disabled`, count: src.channelCount };
     }
 
     src.status = 'fetching';
     src.errorMessage = null;
 
     try {
-      console.log(`[PlaylistService] Fetching "${src.name}" from ${src.url}...`);
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000); // 90s timeout
+      let m3uText = '';
 
-      const response = await fetch(src.url, {
-        headers: {
-          'User-Agent': this.settings.userAgent || DEFAULT_SETTINGS.userAgent,
-          'Accept': '*/*',
-        },
-        signal: controller.signal,
-        redirect: 'follow',
-      });
+      if (src.type === 'uploaded' && src.filePath && fs.existsSync(src.filePath)) {
+        console.log(`[Cartel 187] Reading uploaded playlist from ${src.filePath}...`);
+        m3uText = fs.readFileSync(src.filePath, 'utf-8');
+      } else {
+        console.log(`[Cartel 187] Fetching "${src.name}" from ${src.url}...`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 90000);
 
-      clearTimeout(timeoutId);
+        const response = await fetch(src.url, {
+          headers: {
+            'User-Agent': this.settings.userAgent || DEFAULT_SETTINGS.userAgent,
+            'Accept': '*/*',
+          },
+          signal: controller.signal,
+          redirect: 'follow',
+        });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        m3uText = await response.text();
       }
 
-      const m3uText = await response.text();
       if (!m3uText.includes('#EXTM3U') && !m3uText.includes('#EXTINF')) {
         throw new Error('Response is not a valid M3U playlist format');
       }
@@ -327,13 +412,14 @@ class PlaylistService {
       src.status = 'success';
 
       this.applyCustomizations();
+      this.updateAniNexusCounts();
       this.saveCache();
       this.saveCustomizations();
 
-      console.log(`[PlaylistService] Source "${src.name}" synced: ${channels.length} channels`);
+      console.log(`[Cartel 187] Source "${src.name}" (${src.slug}) synced: ${channels.length} channels`);
       return { success: true, message: `Synced ${channels.length} channels from ${src.name}`, count: channels.length };
     } catch (err: any) {
-      console.error(`[PlaylistService] Error fetching source "${src.name}":`, err);
+      console.error(`[Cartel 187] Error fetching source "${src.name}":`, err);
       src.status = 'error';
       src.errorMessage = err.message || 'Fetch failed';
       this.saveCustomizations();
@@ -348,7 +434,7 @@ class PlaylistService {
 
     this.isSyncingAll = true;
     const enabledSources = this.sources.filter((s) => s.enabled);
-    console.log(`[PlaylistService] Starting sync for ${enabledSources.length} enabled playlist sources...`);
+    console.log(`[Cartel 187] Starting sync for ${enabledSources.length} active sources...`);
 
     let totalSynced = 0;
     const errors: string[] = [];
@@ -364,20 +450,18 @@ class PlaylistService {
 
     this.lastSyncTime = new Date();
     this.isSyncingAll = false;
+    this.updateAniNexusCounts();
 
     const total = this.getAllChannels().length;
     if (errors.length === 0) {
-      return { success: true, message: `All ${enabledSources.length} sources synced successfully (${total} channels total)`, totalChannels: total };
+      return { success: true, message: `All ${enabledSources.length} playlists synced successfully (${total} channels total)`, totalChannels: total };
     } else {
-      return { success: errors.length < enabledSources.length, message: `Synced with warnings: ${errors.join('; ')}`, totalChannels: total };
+      return { success: errors.length < enabledSources.length, message: `Synced with alerts: ${errors.join('; ')}`, totalChannels: total };
     }
   }
 
   /**
-   * Lossless M3U Parser:
-   * Captures preDirectives (e.g. SunNXT ClearKey KODIPROP before #EXTINF),
-   * exact #EXTINF attributes, postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, exp, hmac),
-   * and full stream URL (including ?|cookie=... parameters).
+   * Lossless M3U Parser
    */
   private parseM3UContent(content: string, sourceId: string): { channels: ChannelItem[]; headers: string[] } {
     const rawLines = content.split(/\r?\n/);
@@ -411,14 +495,12 @@ class PlaylistService {
 
       if (line.startsWith('#EXTINF:')) {
         hasSeenExtInf = true;
-        // If an EXTINF arrived without URL (e.g. section separator title), start fresh
         if (currentExtInf) {
           currentPre = [];
         }
         currentExtInf = this.parseExtInfLine(line, sourceId);
         currentPost = [];
       } else if (line.startsWith('#')) {
-        // Repeated #EXTM3U in mid-file: keep as header if it has EPG url, else skip
         if (line.startsWith('#EXTM3U')) {
           if (line.includes('tvg-url') || line.includes('x-tvg-url')) {
             headers.push(line);
@@ -431,7 +513,7 @@ class PlaylistService {
         } else {
           currentPre.push(line);
         }
-      } else if (/^(https?|rtmp|udp|rtsp):\/\//i.test(line)) {
+      } else if (/^(https?|rtmp|udp|rtsp|streambox):\/\//i.test(line)) {
         if (currentExtInf) {
           const rawId = currentExtInf.tvgId || `${currentExtInf.name.replace(/[^a-zA-Z0-9]/g, '_')}_${parsedChannels.length + 1}`;
           const channelId = `${sourceId}_${rawId}`;
@@ -497,8 +579,7 @@ class PlaylistService {
     let groupTitle = getAttr('group-title') || 'General';
     let groupLogo = getAttr('group-logo') || '';
 
-    // USER REQUIREMENT:
-    // Remove group logos and streamx suffix from zeotv playlist
+    // Strip STREAMX suffix and group logos for zeotv if enabled
     if (sourceId === 'zeotv') {
       if (this.settings.zeotvStripSuffix) {
         groupTitle = groupTitle.replace(/\s*\|\s*STREAMX/gi, '').replace(/\s*STREAMX\s*/gi, '').trim();
@@ -543,7 +624,6 @@ class PlaylistService {
 
         const finalGroup = channel.customGroup || channel.groupTitle;
 
-        // Apply bulk group logo if set
         if (this.groupLogos[finalGroup] !== undefined) {
           channel.customGroupLogo = this.groupLogos[finalGroup];
         }
@@ -555,16 +635,97 @@ class PlaylistService {
     }
   }
 
+  /**
+   * Updates channel counts for each AniNexus stream category
+   */
+  private updateAniNexusCounts() {
+    const all = this.getAllChannels();
+    for (const item of this.aninexusItems) {
+      item.lastUpdated = new Date().toISOString();
+      if (item.id === 'alltv') {
+        item.channelCount = all.length;
+      } else {
+        const matching = this.getChannelsForAniNexusCategory(item.id);
+        item.channelCount = matching.length;
+      }
+    }
+  }
+
+  public getChannelsForAniNexusCategory(categoryId: string): ChannelItem[] {
+    const all = this.getAllChannels().filter((c) => c.enabled);
+    switch (categoryId) {
+      case 'zee':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return g.includes('zee') || n.startsWith('zee ') || n.includes('zeetv') || n.includes('zee cinema');
+        });
+      case 'jiiotv':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return c.sourceId === 'plugx' || g.includes('jio') || n.includes('jio');
+        });
+      case 'matchevents':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return (
+            g.includes('event') ||
+            g.includes('ipl') ||
+            g.includes('match') ||
+            g.includes('sports') ||
+            n.includes('live event') ||
+            n.includes('match') ||
+            n.includes('ipl')
+          );
+        });
+      case 'sony':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return g.includes('sony') || n.includes('sony') || n.includes('ten 1') || n.includes('ten 2') || n.includes('ten 3');
+        });
+      case 'starsports':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return g.includes('star sports') || n.includes('star sports') || n.includes('ss1') || n.includes('ss2');
+        });
+      case 'willow':
+        return all.filter((c) => {
+          const g = (c.customGroup || c.groupTitle).toLowerCase();
+          const n = (c.customName || c.name).toLowerCase();
+          return g.includes('willow') || n.includes('willow') || n.includes('cricket');
+        });
+      case 'alltv':
+      default:
+        return all;
+    }
+  }
+
+  public getAniNexusItems(): AniNexusItem[] {
+    this.updateAniNexusCounts();
+    return this.aninexusItems;
+  }
+
   public getSources(): PlaylistSource[] {
     return this.sources;
   }
 
-  public addSource(source: { name: string; url: string; id?: string }) {
+  public getSourceBySlugOrId(slugOrId: string): PlaylistSource | undefined {
+    return this.sources.find((s) => s.slug === slugOrId || s.id === slugOrId);
+  }
+
+  public addSource(source: { name: string; url: string; id?: string; slug?: string }) {
+    const baseSlug = (source.slug || source.name).toLowerCase().replace(/[^a-z0-9_-]/g, '-');
     const id = source.id || `source_${Date.now()}`;
     const newSource: PlaylistSource = {
       id: id.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      slug: baseSlug,
       name: source.name,
       url: source.url,
+      type: 'remote',
       enabled: true,
       lastSyncTime: null,
       status: 'idle',
@@ -577,23 +738,80 @@ class PlaylistService {
     return newSource;
   }
 
+  /**
+   * Uploads and hosts a custom .m3u / .m3u8 file
+   */
+  public uploadM3UFile(filename: string, content: string, displayName: string, customSlug?: string): PlaylistSource {
+    this.ensureDirs();
+    const cleanSlug = (customSlug || path.parse(filename).name || `upload_${Date.now()}`)
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]/g, '-');
+    const id = `upload_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+    const savedPath = path.join(UPLOADS_DIR, `${cleanSlug}.m3u`);
+
+    fs.writeFileSync(savedPath, content, 'utf-8');
+
+    const newSource: PlaylistSource = {
+      id,
+      slug: cleanSlug,
+      name: displayName || path.parse(filename).name,
+      url: `file://${savedPath}`,
+      type: 'uploaded',
+      filePath: savedPath,
+      enabled: true,
+      lastSyncTime: null,
+      status: 'idle',
+      errorMessage: null,
+      channelCount: 0,
+    };
+
+    this.sources.push(newSource);
+    this.saveCustomizations();
+    this.fetchSingleSource(id).catch((e) => console.error(e));
+    return newSource;
+  }
+
   public updateSource(id: string, updates: Partial<PlaylistSource>) {
     const src = this.sources.find((s) => s.id === id);
     if (!src) return null;
 
     const oldUrl = src.url;
+    const oldEnabled = src.enabled;
+
+    if (updates.slug) {
+      updates.slug = updates.slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+    }
+
     Object.assign(src, updates);
     this.saveCustomizations();
 
-    if (updates.url && updates.url !== oldUrl) {
+    if (updates.url && updates.url !== oldUrl && src.type !== 'uploaded') {
       this.fetchSingleSource(id).catch((e) => console.error(e));
     }
+
+    if (updates.enabled !== undefined && updates.enabled !== oldEnabled) {
+      // Toggle all channels under this source
+      const channels = this.channelsBySource[id] || [];
+      for (const ch of channels) {
+        ch.enabled = updates.enabled;
+        if (!this.channelOverrides[ch.id]) this.channelOverrides[ch.id] = {};
+        this.channelOverrides[ch.id].enabled = updates.enabled;
+      }
+      this.saveCustomizations();
+    }
+
     return src;
   }
 
   public deleteSource(id: string) {
     const idx = this.sources.findIndex((s) => s.id === id);
     if (idx !== -1) {
+      const src = this.sources[idx];
+      if (src.type === 'uploaded' && src.filePath && fs.existsSync(src.filePath)) {
+        try {
+          fs.unlinkSync(src.filePath);
+        } catch (e) {}
+      }
       this.sources.splice(idx, 1);
       delete this.channelsBySource[id];
       delete this.sourceHeaders[id];
@@ -604,11 +822,13 @@ class PlaylistService {
     return false;
   }
 
-  public getAllChannels(sourceId?: string): ChannelItem[] {
+  public getAllChannels(sourceIdOrSlug?: string): ChannelItem[] {
     const result: ChannelItem[] = [];
 
-    if (sourceId && sourceId !== 'all') {
-      const srcChannels = this.channelsBySource[sourceId] || [];
+    if (sourceIdOrSlug && sourceIdOrSlug !== 'all') {
+      const src = this.getSourceBySlugOrId(sourceIdOrSlug);
+      const targetId = src ? src.id : sourceIdOrSlug;
+      const srcChannels = this.channelsBySource[targetId] || [];
       result.push(...srcChannels);
     } else {
       for (const [sId, chs] of Object.entries(this.channelsBySource)) {
@@ -627,9 +847,9 @@ class PlaylistService {
     return result;
   }
 
-  public getGroups(sourceId?: string): { name: string; count: number; enabledCount: number; isVisible: boolean; logo?: string }[] {
+  public getGroups(sourceIdOrSlug?: string): { name: string; count: number; enabledCount: number; isVisible: boolean; logo?: string }[] {
     const groupMap: Record<string, { total: number; enabled: number; logo?: string }> = {};
-    const all = this.getAllChannels(sourceId);
+    const all = this.getAllChannels(sourceIdOrSlug);
 
     for (const ch of all) {
       const group = ch.customGroup || ch.groupTitle || 'General';
@@ -732,6 +952,21 @@ class PlaylistService {
 
     this.saveCustomizations();
     return true;
+  }
+
+  public bulkToggleChannels(channelIds: string[], enabled: boolean): number {
+    let count = 0;
+    for (const id of channelIds) {
+      const channel = this.getAllChannels().find((c) => c.id === id);
+      if (channel) {
+        channel.enabled = enabled;
+        if (!this.channelOverrides[id]) this.channelOverrides[id] = {};
+        this.channelOverrides[id].enabled = enabled;
+        count++;
+      }
+    }
+    this.saveCustomizations();
+    return count;
   }
 
   public resetChannel(id: string) {
@@ -875,29 +1110,30 @@ class PlaylistService {
       autoSync: this.settings.autoSync,
       publicBaseUrl: this.settings.publicBaseUrl || process.env.APP_URL || '',
       sources: this.sources,
+      aninexus: this.getAniNexusItems(),
     };
   }
 
   /**
    * Generates M3U playlist file for a specific source OR all sources combined
-   * Perfectly preserving preDirectives (#KODIPROP before #EXTINF), postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, hmac),
-   * exact stream URLs, and group logos.
    */
-  public generateM3U(sourceId?: string, filterGroup?: string): string {
-    const isAll = !sourceId || sourceId === 'all';
-    const channels = this.getAllChannels(isAll ? undefined : sourceId).filter((c) => c.enabled);
+  public generateM3U(sourceIdOrSlug?: string, filterGroup?: string): string {
+    const isAll = !sourceIdOrSlug || sourceIdOrSlug === 'all';
+    const src = !isAll ? this.getSourceBySlugOrId(sourceIdOrSlug) : undefined;
+    const targetId = src ? src.id : sourceIdOrSlug;
+
+    const channels = this.getAllChannels(isAll ? undefined : targetId).filter((c) => c.enabled);
     const filtered = filterGroup
       ? channels.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
       : channels;
 
     let header = '#EXTM3U';
-    if (!isAll && this.sourceHeaders[sourceId]?.length > 0) {
-      const firstLine = this.sourceHeaders[sourceId][0];
+    if (!isAll && targetId && this.sourceHeaders[targetId]?.length > 0) {
+      const firstLine = this.sourceHeaders[targetId][0];
       if (firstLine.startsWith('#EXTM3U')) {
         header = firstLine;
       }
     } else {
-      // Unified header with all primary EPG sources
       header = '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://avkb.short.gy/jioepg.xml.gz,https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz,https://mitthu786.github.io/tvepg/tataplay/epg.xml.gz,https://avkb.short.gy/tsepg.xml.gz" refresh="3600"';
     }
 
@@ -906,8 +1142,8 @@ class PlaylistService {
     }
 
     const lines: string[] = [header];
-    const sourceLabel = isAll ? 'ALL COMBINED SOURCES' : (this.sources.find((s) => s.id === sourceId)?.name || sourceId);
-    lines.push(`# IPTV Stream Relay & Multi-Playlist Studio | ${new Date().toISOString()}`);
+    const sourceLabel = isAll ? 'ALL COMBINED SOURCES (CARTEL 187 MASTER)' : (src?.name || targetId);
+    lines.push(`# Cartel 187 Multi-Playlist Relay Studio | ${new Date().toISOString()}`);
     lines.push(`# Playlist Source: ${sourceLabel}`);
     lines.push(`# Total Channels: ${filtered.length}`);
 
@@ -920,12 +1156,11 @@ class PlaylistService {
       const streamUrl = ch.customUrl || ch.url;
       const chno = ch.customChno || ch.tvgChno;
       
-      // Determine effective group logo (custom group logo, bulk group logo, or original group logo)
       const groupLogo = ch.customGroupLogo !== undefined
         ? ch.customGroupLogo
         : (this.groupLogos[groupTitle] || ch.groupLogo);
 
-      // 1. Output preDirectives (crucial for SunNXT clearkey #KODIPROP which MUST precede #EXTINF)
+      // 1. Output preDirectives
       if (ch.preDirectives && ch.preDirectives.length > 0) {
         for (const dir of ch.preDirectives) {
           lines.push(dir);
@@ -945,13 +1180,12 @@ class PlaylistService {
 
       lines.push(`${extInfParts.join(' ')},${displayName}`);
 
-      // 3. Output postDirectives (#EXTVLCOPT, #EXTHTTP, cookies, hmac, exp, User-Agent)
+      // 3. Output postDirectives
       if (ch.postDirectives && ch.postDirectives.length > 0) {
         for (const dir of ch.postDirectives) {
           lines.push(dir);
         }
       } else if (ch.directives && ch.directives.length > 0 && ch.preDirectives.length === 0) {
-        // Fallback for custom channels
         for (const dir of ch.directives) {
           lines.push(dir);
         }
@@ -965,27 +1199,130 @@ class PlaylistService {
   }
 
   /**
+   * Generates M3U playlist for AniNexus sections (Zee, JioTV, Match Events, Sony, Star Sports, Willow, All TV)
+   */
+  public generateAniNexusM3U(categoryIdOrSlug?: string): string {
+    const isAll = !categoryIdOrSlug || categoryIdOrSlug === 'all' || categoryIdOrSlug === 'alltv';
+    const lines: string[] = [
+      '#EXTM3U url-tvg="https://avkb.short.gy/jioepg.xml.gz" x-tvg-url="https://epgshare01.online/epgshare01/epg_ripper_IN4.xml.gz" refresh="1800"',
+      `# AniNexus by Cartel 187 | Engine for AniTv & StreamBox`,
+      `# Generated: ${new Date().toISOString()}`,
+    ];
+
+    const targetCategories = isAll
+      ? this.aninexusItems.filter((i) => i.id !== 'alltv')
+      : this.aninexusItems.filter((i) => i.id === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug);
+
+    for (const item of targetCategories) {
+      lines.push('');
+      lines.push(`# ============================================================`);
+      lines.push(`# Category: ${item.name} (${item.category})`);
+      lines.push(`# Deep-link: ${item.uri}`);
+      lines.push(`# ============================================================`);
+
+      // 1. First add the primary AniTv StreamBox deep-link channel
+      lines.push(
+        `#EXTINF:-1 tvg-id="aninexus_${item.id}" tvg-name="${item.name}" tvg-logo="${item.logo}" group-title="AniNexus | ${item.name}" group-logo="${item.logo}",★ ${item.name} (AniTv Direct)`
+      );
+      lines.push(item.uri);
+
+      // 2. Add all matched live channels for this category from the master relay pool
+      const matchingChannels = this.getChannelsForAniNexusCategory(item.id);
+      for (const ch of matchingChannels) {
+        if (!ch.enabled) continue;
+        const displayName = ch.customName || ch.name;
+        const groupTitle = `AniNexus | ${item.name}`;
+        const logo = ch.customLogo || ch.tvgLogo || item.logo;
+        const tvgId = ch.tvgId || ch.id;
+
+        if (ch.preDirectives?.length > 0) {
+          for (const d of ch.preDirectives) lines.push(d);
+        }
+
+        let parts = [
+          `#EXTINF:-1`,
+          `tvg-id="${tvgId}"`,
+          `tvg-name="${displayName}"`,
+          `tvg-logo="${logo}"`,
+          `group-title="${groupTitle}"`,
+          `group-logo="${item.logo}"`,
+        ];
+        lines.push(`${parts.join(' ')},${displayName}`);
+
+        if (ch.postDirectives?.length > 0) {
+          for (const d of ch.postDirectives) lines.push(d);
+        } else if (ch.directives?.length > 0) {
+          for (const d of ch.directives) lines.push(d);
+        }
+
+        lines.push(ch.customUrl || ch.url);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Generates structured JSON representation for AniNexus
+   */
+  public generateAniNexusJSON(categoryIdOrSlug?: string) {
+    const isAll = !categoryIdOrSlug || categoryIdOrSlug === 'all' || categoryIdOrSlug === 'alltv';
+    const targetCategories = isAll
+      ? this.aninexusItems
+      : this.aninexusItems.filter((i) => i.id === categoryIdOrSlug || i.m3uSlug === categoryIdOrSlug);
+
+    return {
+      service: 'AniNexus by Cartel 187',
+      client: 'AniTv & StreamBox',
+      generatedAt: new Date().toISOString(),
+      syncIntervalMinutes: 30,
+      categories: targetCategories.map((item) => ({
+        id: item.id,
+        name: item.name,
+        category: item.category,
+        deepLink: item.uri,
+        hash: item.hash,
+        logo: item.logo,
+        m3uUrl: `/api/aninexus/${item.m3uSlug}.m3u`,
+        jsonUrl: `/api/aninexus/${item.m3uSlug}.json`,
+        channelCount: item.channelCount,
+        channels: this.getChannelsForAniNexusCategory(item.id).map((c) => ({
+          id: c.id,
+          name: c.customName || c.name,
+          logo: c.customLogo || c.tvgLogo,
+          streamUrl: c.customUrl || c.url,
+          hasClearKey: !!c.hasClearKey,
+        })),
+      })),
+    };
+  }
+
+  /**
    * Generates structured JSON representation for a specific source OR all sources combined
    */
-  public generateJSON(sourceId?: string, filterGroup?: string) {
-    const isAll = !sourceId || sourceId === 'all';
-    const all = this.getAllChannels(isAll ? undefined : sourceId);
+  public generateJSON(sourceIdOrSlug?: string, filterGroup?: string) {
+    const isAll = !sourceIdOrSlug || sourceIdOrSlug === 'all';
+    const src = !isAll ? this.getSourceBySlugOrId(sourceIdOrSlug) : undefined;
+    const targetId = src ? src.id : sourceIdOrSlug;
+
+    const all = this.getAllChannels(isAll ? undefined : targetId);
     const channels = filterGroup
       ? all.filter((c) => (c.customGroup || c.groupTitle).toLowerCase() === filterGroup.toLowerCase())
       : all;
 
-    const sourceLabel = isAll ? 'All Combined Playlists' : (this.sources.find((s) => s.id === sourceId)?.name || sourceId);
+    const sourceLabel = isAll ? 'All Combined Playlists' : (src?.name || targetId);
 
     return {
-      service: 'IPTV Stream Relay & Multi-Playlist Studio',
+      service: 'Cartel 187 IPTV Relay Studio',
       playlistSource: sourceLabel,
-      sourceId: isAll ? 'all' : sourceId,
+      sourceId: isAll ? 'all' : targetId,
+      slug: src ? src.slug : 'all',
       generatedAt: new Date().toISOString(),
       lastSyncTime: this.lastSyncTime ? this.lastSyncTime.toISOString() : null,
       totalChannels: channels.length,
       activeChannels: channels.filter((c) => c.enabled).length,
-      sources: isAll ? this.sources : this.sources.filter((s) => s.id === sourceId),
-      groups: this.getGroups(isAll ? undefined : sourceId),
+      sources: isAll ? this.sources : this.sources.filter((s) => s.id === targetId || s.slug === sourceIdOrSlug),
+      groups: this.getGroups(isAll ? undefined : targetId),
       channels: channels.map((c) => ({
         id: c.id,
         sourceId: c.sourceId,

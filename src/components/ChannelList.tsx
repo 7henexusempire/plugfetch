@@ -41,6 +41,7 @@ interface ChannelListProps {
   onResetChannel: (id: string) => Promise<void>;
   onAddChannel: () => void;
   onPreviewChannel: (channel: ChannelItem) => void;
+  onBulkToggleChannels?: (channelIds: string[], enabled: boolean) => Promise<void>;
 }
 
 export const ChannelList: React.FC<ChannelListProps> = ({
@@ -66,11 +67,39 @@ export const ChannelList: React.FC<ChannelListProps> = ({
   onResetChannel,
   onAddChannel,
   onPreviewChannel,
+  onBulkToggleChannels,
 }) => {
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
   const handleImageError = (id: string) => {
     setImageErrors((prev) => ({ ...prev, [id]: true }));
+  };
+
+  const handleSelectAllOnPage = () => {
+    if (selectedChannelIds.length === channels.length && channels.length > 0) {
+      setSelectedChannelIds([]);
+    } else {
+      setSelectedChannelIds(channels.map((c) => c.id));
+    }
+  };
+
+  const handleToggleSelectChannel = (id: string) => {
+    setSelectedChannelIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkToggle = async (enabled: boolean) => {
+    if (selectedChannelIds.length === 0 || !onBulkToggleChannels) return;
+    setIsBulkProcessing(true);
+    try {
+      await onBulkToggleChannels(selectedChannelIds, enabled);
+      setSelectedChannelIds([]);
+    } finally {
+      setIsBulkProcessing(false);
+    }
   };
 
   return (
@@ -193,7 +222,15 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-950/40 text-[11px] uppercase tracking-wider text-slate-400 select-none">
-                <th className="py-3 px-4 w-14 text-center">Status</th>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={selectedChannelIds.length === channels.length && channels.length > 0}
+                    onChange={handleSelectAllOnPage}
+                    className="w-3.5 h-3.5 rounded text-cyan-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                  />
+                </th>
+                <th className="py-3 px-4 w-14 text-center">Active</th>
                 <th className="py-3 px-4 w-16">Logo</th>
                 <th className="py-3 px-4">Channel Name &amp; Details</th>
                 <th className="py-3 px-4">Group / Category</th>
@@ -203,6 +240,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             </thead>
             <tbody className="divide-y divide-slate-800/60 text-xs">
               {channels.map((channel) => {
+                const isSelected = selectedChannelIds.includes(channel.id);
                 const displayName = channel.customName || channel.name;
                 const displayGroup = channel.customGroup || channel.groupTitle;
                 const hasOverrides = !!(
@@ -219,16 +257,28 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   <tr
                     key={channel.id}
                     className={`group transition-colors ${
-                      channel.enabled
+                      isSelected
+                        ? 'bg-cyan-950/30 text-white'
+                        : channel.enabled
                         ? 'hover:bg-slate-800/40 text-slate-200'
                         : 'bg-slate-950/40 text-slate-500 hover:bg-slate-900/40 opacity-75'
                     }`}
                   >
+                    {/* Checkbox */}
+                    <td className="py-3 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleToggleSelectChannel(channel.id)}
+                        className="w-3.5 h-3.5 rounded text-cyan-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                      />
+                    </td>
+
                     {/* Toggle Status */}
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => onToggleChannel(channel.id, channel.enabled)}
-                        title={channel.enabled ? 'Click to exclude from M3U' : 'Click to include in M3U'}
+                        title={channel.enabled ? 'Enabled in M3U (click to disable)' : 'Disabled from M3U (click to enable)'}
                         className={`inline-flex items-center justify-center w-7 h-7 rounded-lg transition-all ${
                           channel.enabled
                             ? 'text-emerald-400 hover:bg-emerald-950/60'
@@ -387,6 +437,48 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           </table>
         )}
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedChannelIds.length > 0 && (
+        <div className="sticky bottom-4 left-4 right-4 z-30 mx-4 my-2 p-3 rounded-2xl bg-slate-900/95 border border-cyan-500/80 shadow-2xl backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-slideUp">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span className="font-bold text-white font-mono">
+              {selectedChannelIds.length} channels selected
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleBulkToggle(true)}
+              disabled={isBulkProcessing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-md shadow-emerald-600/30 transition-all disabled:opacity-50"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span>Enable Selected</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleBulkToggle(false)}
+              disabled={isBulkProcessing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold border border-slate-700 transition-all disabled:opacity-50"
+            >
+              <EyeOff className="w-3.5 h-3.5 text-rose-400" />
+              <span>Disable Selected</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedChannelIds([])}
+              className="px-2.5 py-1.5 rounded-xl text-slate-400 hover:text-white transition-colors"
+            >
+              Deselect All
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Pagination Footer */}
       {totalPages > 1 && (
