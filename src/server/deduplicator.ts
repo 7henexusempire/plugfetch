@@ -153,22 +153,13 @@ export function deduplicateChannelList(
     }
   }
 
-  // 3. Post-process to disambiguate names for distinct stream variants
+  // 3. Post-process: preserve pristine channel names as requested without appending server/stream tags
   if (disambiguateNames && mode === 'smart') {
     for (const [_, variants] of nameToStreamsMap.entries()) {
       if (variants.length > 1) {
         variants.forEach((v, index) => {
           v.streamVariant = index + 1;
-          const baseName = (v.customName || v.name).replace(/\s*\[Stream\s*\d+\]/gi, '').trim();
-          
-          // Identify source flavor if helpful (e.g. Jio / Sun / Live)
-          let sourceTag = `Stream ${index + 1}`;
-          if (v.sourceId === 'zeotv') sourceTag = `Server 2 [SunNXT]`;
-          else if (v.sourceId === 'plugx') sourceTag = `Server 1 [JioTV]`;
-          else if (v.sourceId === 'server-lrl45') sourceTag = `Server 3 [Hotstar]`;
-
-          // Clone or decorate display name so player shows variant
-          v.customName = `${baseName} [${sourceTag}]`;
+          // Keep original pristine name (e.g. Star Gold HD, Star Sports)
         });
       }
     }

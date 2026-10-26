@@ -538,18 +538,22 @@ export const NexusEmpireView: React.FC<NexusEmpireViewProps> = ({
                   {item.description}
                 </p>
 
-                {/* Deep-link Box */}
-                <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs font-mono">
-                  <span className="text-slate-300 truncate text-[11px]">
-                    {item.uri}
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(item.uri, 'StreamBox Deep-Link', `uri_${item.id}`)}
-                    className="shrink-0 p-1 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-900 transition-colors"
-                    title="Copy streambox:// link"
-                  >
-                    {copiedKey === `uri_${item.id}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  </button>
+                {/* Full M3U URL Box */}
+                <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-2.5 space-y-1.5 text-xs font-mono">
+                  <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">M3U Playlist URL</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-cyan-300 truncate text-[11px] select-all font-mono">
+                      {shortM3uUrl}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(shortM3uUrl, `${item.name} M3U URL`, `m3u_box_${item.id}`)}
+                      className="shrink-0 px-2 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-300 hover:text-white transition-colors flex items-center gap-1 text-[11px]"
+                      title="Copy full M3U URL"
+                    >
+                      {copiedKey === `m3u_box_${item.id}` ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedKey === `m3u_box_${item.id}` ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
