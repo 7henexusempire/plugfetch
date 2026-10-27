@@ -114,7 +114,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search 1,600+ channels by name, group, or ID..."
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition-colors"
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
           />
           {searchQuery && (
             <button
@@ -129,12 +129,12 @@ export const ChannelList: React.FC<ChannelListProps> = ({
         {/* Filters & Actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           {/* Playlist Source Filter */}
-          <div className="flex items-center gap-1.5 bg-slate-950 border border-cyan-800/60 rounded-xl px-3 py-1.5 text-xs">
-            <Tv className="w-3.5 h-3.5 text-cyan-400" />
+          <div className="flex items-center gap-1.5 bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-1.5 text-xs">
+            <Tv className="w-3.5 h-3.5 text-amber-400" />
             <select
               value={selectedSource}
               onChange={(e) => onSourceChange(e.target.value)}
-              className="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer max-w-[170px] truncate"
+              className="bg-transparent text-amber-300 font-semibold focus:outline-none cursor-pointer max-w-[170px] truncate"
             >
               <option value="all" className="bg-slate-900 text-slate-200">All Sources Combined</option>
               {sources.map((src) => (
@@ -178,7 +178,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           {/* Add Channel Button */}
           <button
             onClick={onAddChannel}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-all active:scale-95 ml-auto md:ml-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs font-semibold shadow-sm transition-all active:scale-95 ml-auto md:ml-0"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Add Custom</span>
@@ -192,7 +192,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
           Showing <span className="text-slate-200 font-medium">{channels.length}</span> of{' '}
           <span className="text-slate-200 font-medium">{totalChannels}</span> channels
           {selectedGroup !== 'all' && (
-            <span className="ml-1 text-cyan-400 font-medium">in &ldquo;{selectedGroup}&rdquo;</span>
+            <span className="ml-1 text-amber-400 font-medium">in &ldquo;{selectedGroup}&rdquo;</span>
           )}
         </div>
         <div className="flex items-center gap-4 text-[11px]">
@@ -209,7 +209,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
       <div className="overflow-x-auto min-h-[420px]">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-20 text-slate-400">
-            <div className="w-8 h-8 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mb-3"></div>
             <p className="text-sm">Loading channels...</p>
           </div>
         ) : channels.length === 0 ? (
@@ -227,7 +227,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     type="checkbox"
                     checked={selectedChannelIds.length === channels.length && channels.length > 0}
                     onChange={handleSelectAllOnPage}
-                    className="w-3.5 h-3.5 rounded text-cyan-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                    className="w-3.5 h-3.5 rounded text-amber-500 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
                   />
                 </th>
                 <th className="py-3 px-4 w-14 text-center">Active</th>
@@ -258,7 +258,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     key={channel.id}
                     className={`group transition-colors ${
                       isSelected
-                        ? 'bg-cyan-950/30 text-white'
+                        ? 'bg-amber-950/40 text-white'
                         : channel.enabled
                         ? 'hover:bg-slate-800/40 text-slate-200'
                         : 'bg-slate-950/40 text-slate-500 hover:bg-slate-900/40 opacity-75'
@@ -270,7 +270,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => handleToggleSelectChannel(channel.id)}
-                        className="w-3.5 h-3.5 rounded text-cyan-600 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
+                        className="w-3.5 h-3.5 rounded text-amber-500 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
                       />
                     </td>
 
@@ -313,7 +313,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     {/* Name & Details */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-white group-hover:text-cyan-300 transition-colors">
+                        <span className="font-semibold text-sm text-white group-hover:text-amber-300 transition-colors">
                           {displayName}
                         </span>
                         {channel.customChno && (
@@ -328,7 +328,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                           </span>
                         )}
                         {channel.sourceId && (
-                          <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/80 border border-cyan-800/70 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 border border-amber-500/50 px-1.5 py-0.5 rounded">
                             {channel.sourceId}
                           </span>
                         )}
@@ -362,7 +362,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         )}
                         <button
                           onClick={() => onGroupChange(displayGroup)}
-                          className="text-left font-medium text-slate-300 hover:text-cyan-400 transition-colors"
+                          className="text-left font-medium text-slate-300 hover:text-amber-400 transition-colors"
                           title="Filter by this group"
                         >
                           {displayGroup}
@@ -403,7 +403,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                         {/* Preview / Player Button */}
                         <button
                           onClick={() => onPreviewChannel(channel)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition-colors"
                           title="Preview stream & inspect DRM/headers"
                         >
                           <Play className="w-3.5 h-3.5" />
@@ -440,9 +440,9 @@ export const ChannelList: React.FC<ChannelListProps> = ({
 
       {/* Floating Bulk Action Bar */}
       {selectedChannelIds.length > 0 && (
-        <div className="sticky bottom-4 left-4 right-4 z-30 mx-4 my-2 p-3 rounded-2xl bg-slate-900/95 border border-cyan-500/80 shadow-2xl backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-slideUp">
+        <div className="sticky bottom-4 left-4 right-4 z-30 mx-4 my-2 p-3 rounded-2xl bg-slate-900/95 border border-amber-500/80 shadow-2xl backdrop-blur-xl flex flex-wrap items-center justify-between gap-3 text-xs animate-slideUp">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
             <span className="font-bold text-white font-mono">
               {selectedChannelIds.length} channels selected
             </span>
@@ -514,7 +514,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                   onClick={() => onPageChange(pageNum)}
                   className={`w-7 h-7 rounded-lg text-xs font-mono font-medium transition-colors ${
                     pageNum === currentPage
-                      ? 'bg-cyan-600 text-white font-bold'
+                      ? 'bg-amber-500 text-slate-950 font-bold'
                       : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                   }`}
                 >

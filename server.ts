@@ -7,6 +7,8 @@ import { fileURLToPath } from 'url';
 import { playlistService } from './src/server/playlistService';
 import { rebuildService } from './src/server/rebuildService';
 import { cloudstreamService } from './src/server/cloudstreamService';
+import { skystreamService } from './src/server/skystreamService';
+import { stremioNuvioService } from './src/server/stremioNuvioService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -296,8 +298,23 @@ app.get('/playlist/:slug.json', (req, res) => serveJSON(req, res, req.params.slu
 // Direct root playlist alias (e.g. /cartelx.m3u or /zeotv.m3u)
 app.get('/:slug.m3u', (req, res, next) => {
   const { slug } = req.params;
-  if (['api', 'health', 'assets'].includes(slug)) return next();
+  if (slug === 'cloudstream') return serveCloudStreamM3U(req, res);
+  if (['api', 'health', 'assets', 'cloudstream'].includes(slug)) return next();
   return serveM3U(req, res, slug);
+});
+
+app.get('/:slug.m3u8', (req, res, next) => {
+  const { slug } = req.params;
+  if (slug === 'cloudstream') return serveCloudStreamM3U(req, res);
+  if (['api', 'health', 'assets', 'cloudstream'].includes(slug)) return next();
+  return serveM3U(req, res, slug);
+});
+
+app.get('/:slug.json', (req, res, next) => {
+  const { slug } = req.params;
+  if (slug === 'cloudstream') return serveCloudStreamJSON(req, res);
+  if (['api', 'health', 'assets', 'cloudstream'].includes(slug)) return next();
+  return next();
 });
 
 // ============================================================
@@ -632,7 +649,16 @@ app.post('/api/cloudstream/repos', (req: Request, res: Response) => {
 app.post('/api/cloudstream/repos/:id/sync', async (req: Request, res: Response) => {
   try {
     const ok = await cloudstreamService.fetchSingleRepo(req.params.id);
-    return res.json({ success: ok });
+    return res.json({ success: ok, repos: cloudstreamService.getRepos() });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cloudstream/sync-all', async (req: Request, res: Response) => {
+  try {
+    const result = await cloudstreamService.fetchAllRepos();
+    return res.json({ success: true, ...result, repos: cloudstreamService.getRepos() });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
@@ -681,6 +707,44 @@ app.delete('/api/cloudstream/items/:id', (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/cloudstream/items/:id/toggle', (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+    const updated = cloudstreamService.toggleItem(req.params.id, enabled);
+    if (!updated) return res.status(404).json({ error: 'Item not found' });
+    return res.json({ success: true, item: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cloudstream/categories/toggle', (req: Request, res: Response) => {
+  try {
+    const { category, enabled } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+    const count = cloudstreamService.toggleCategory(category, enabled);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cloudstream/categories/rename', (req: Request, res: Response) => {
+  try {
+    const { oldCategory, newCategory } = req.body;
+    if (!oldCategory || !newCategory) return res.status(400).json({ error: 'Both old and new category names required' });
+    const count = cloudstreamService.renameCategory(oldCategory, newCategory);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/cloudstream/raw-json', (req: Request, res: Response) => {
+  const repoId = req.query.repoId as string | undefined;
+  return res.json(cloudstreamService.getRawJson(repoId));
+});
+
 function serveCloudStreamM3U(req: Request, res: Response) {
   const m3u = cloudstreamService.generateM3U();
   res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
@@ -689,10 +753,310 @@ function serveCloudStreamM3U(req: Request, res: Response) {
   return res.send(m3u);
 }
 
+function serveCloudStreamJSON(req: Request, res: Response) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json(cloudstreamService.generateJSON());
+}
+
 app.get('/cloudstream.m3u', serveCloudStreamM3U);
 app.get('/cloudstream.m3u8', serveCloudStreamM3U);
 app.get('/api/cloudstream.m3u', serveCloudStreamM3U);
 app.get('/api/cloudstream/playlist.m3u', serveCloudStreamM3U);
+app.get('/cloudstream.json', serveCloudStreamJSON);
+app.get('/api/cloudstream/json', serveCloudStreamJSON);
+app.get('/api/cloudstream/all.json', serveCloudStreamJSON);
+
+// ============================================================
+// 2D. SKYSTREAM SHORTCODES & EXTENSIONS ENDPOINTS
+// ============================================================
+app.get('/api/skystream/extensions', (req: Request, res: Response) => {
+  return res.json({
+    repos: skystreamService.getRepos(),
+    items: skystreamService.getItems(),
+  });
+});
+
+app.post('/api/skystream/fetch', async (req: Request, res: Response) => {
+  try {
+    const { url, name } = req.body;
+    if (!url) return res.status(400).json({ error: 'Shortcode or Repository URL required' });
+    const result = await skystreamService.fetchByShortcodeOrUrl(url);
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/skystream/sync-all', async (req: Request, res: Response) => {
+  try {
+    const result = await skystreamService.fetchAll();
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/skystream/items', (req: Request, res: Response) => {
+  try {
+    const item = skystreamService.addItem(req.body);
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/skystream/items/:id', (req: Request, res: Response) => {
+  try {
+    const item = skystreamService.updateItem(req.params.id, req.body);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/skystream/items/:id/toggle', (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+    const item = skystreamService.toggleItem(req.params.id, enabled);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/skystream/items/:id', (req: Request, res: Response) => {
+  try {
+    const ok = skystreamService.deleteItem(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/skystream/categories/toggle', (req: Request, res: Response) => {
+  try {
+    const { category, enabled } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+    const count = skystreamService.toggleCategory(category, enabled);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/skystream/categories/rename', (req: Request, res: Response) => {
+  try {
+    const { oldCategory, newCategory } = req.body;
+    if (!oldCategory || !newCategory) return res.status(400).json({ error: 'Both old and new category names required' });
+    const count = skystreamService.renameCategory(oldCategory, newCategory);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/skystream/raw-json', (req: Request, res: Response) => {
+  const targetId = (req.query.targetId || req.query.shortcode) as string | undefined;
+  return res.json(skystreamService.getRawJson(targetId));
+});
+
+function serveSkyStreamM3U(req: Request, res: Response) {
+  const m3u = skystreamService.generateM3U();
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="nexus_skystream.m3u"');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.send(m3u);
+}
+
+function serveSkyStreamJSON(req: Request, res: Response) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json(skystreamService.generateJSON());
+}
+
+app.get('/skystream.m3u', serveSkyStreamM3U);
+app.get('/skystream.m3u8', serveSkyStreamM3U);
+app.get('/api/skystream.m3u', serveSkyStreamM3U);
+app.get('/skystream.json', serveSkyStreamJSON);
+app.get('/api/skystream.json', serveSkyStreamJSON);
+
+// ============================================================
+// 2E. STREMIO / NUVIO & CNCVERSE-BRIDGE ENDPOINTS
+// ============================================================
+app.get('/api/stremio/addons', (req: Request, res: Response) => {
+  return res.json(stremioNuvioService.getAddons());
+});
+
+app.post('/api/stremio/addons', async (req: Request, res: Response) => {
+  try {
+    const { manifestUrl, name } = req.body;
+    if (!manifestUrl) return res.status(400).json({ error: 'Manifest URL is required' });
+    const addon = await stremioNuvioService.addAddon(manifestUrl, name);
+    return res.json({ success: true, addon });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/stremio/addons/:id/sync', async (req: Request, res: Response) => {
+  try {
+    const ok = await stremioNuvioService.fetchAddonManifest(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/stremio/sync-all', async (req: Request, res: Response) => {
+  try {
+    const result = await stremioNuvioService.syncAllAddons();
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/stremio/raw-json', (req: Request, res: Response) => {
+  const addonId = req.query.addonId as string | undefined;
+  return res.json(stremioNuvioService.getRawJson(addonId));
+});
+
+app.get('/api/cncverse/streams', (req: Request, res: Response) => {
+  return res.json({
+    bridge: stremioNuvioService.getBridgeStatus(),
+    streams: stremioNuvioService.getStreams(),
+  });
+});
+
+app.get('/api/cncverse/status', async (req: Request, res: Response) => {
+  const status = await stremioNuvioService.checkBridgeStatus();
+  return res.json({ ...stremioNuvioService.getBridgeStatus(), status });
+});
+
+app.post('/api/cncverse/sync', async (req: Request, res: Response) => {
+  try {
+    await stremioNuvioService.checkBridgeStatus();
+    return res.json({ success: true, bridge: stremioNuvioService.getBridgeStatus() });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cncverse/url', (req: Request, res: Response) => {
+  try {
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL required' });
+    stremioNuvioService.setBridgeUrl(url);
+    return res.json({ success: true, bridge: stremioNuvioService.getBridgeStatus() });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cncverse/streams', (req: Request, res: Response) => {
+  try {
+    const item = stremioNuvioService.addStream(req.body);
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/cncverse/streams/:id', (req: Request, res: Response) => {
+  try {
+    const item = stremioNuvioService.updateStream(req.params.id, req.body);
+    if (!item) return res.status(404).json({ error: 'Stream not found' });
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cncverse/streams/:id/toggle', (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+    const item = stremioNuvioService.toggleStream(req.params.id, enabled);
+    if (!item) return res.status(404).json({ error: 'Stream not found' });
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/cncverse/streams/:id', (req: Request, res: Response) => {
+  try {
+    const ok = stremioNuvioService.deleteStream(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cncverse/categories/toggle', (req: Request, res: Response) => {
+  try {
+    const { category, enabled } = req.body;
+    if (!category) return res.status(400).json({ error: 'Category is required' });
+    const count = stremioNuvioService.toggleCategory(category, enabled);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cncverse/categories/rename', (req: Request, res: Response) => {
+  try {
+    const { oldCategory, newCategory } = req.body;
+    if (!oldCategory || !newCategory) return res.status(400).json({ error: 'Both old and new category names required' });
+    const count = stremioNuvioService.renameCategory(oldCategory, newCategory);
+    return res.json({ success: true, count });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+function serveCNCVerseM3U(req: Request, res: Response) {
+  const m3u = stremioNuvioService.generateCNCVerseM3U();
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="nexus_cncverse.m3u"');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.send(m3u);
+}
+
+function serveCNCVerseJSON(req: Request, res: Response) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json(stremioNuvioService.generateCNCVerseJSON());
+}
+
+function serveStremioM3U(req: Request, res: Response) {
+  const m3u = stremioNuvioService.generateStremioM3U();
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="nexus_stremio_addons.m3u"');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.send(m3u);
+}
+
+function serveStremioJSON(req: Request, res: Response) {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.json(stremioNuvioService.getRawJson());
+}
+
+app.get('/cncverse.m3u', serveCNCVerseM3U);
+app.get('/cncverse.m3u8', serveCNCVerseM3U);
+app.get('/api/cncverse.m3u', serveCNCVerseM3U);
+app.get('/cncverse.json', serveCNCVerseJSON);
+app.get('/api/cncverse.json', serveCNCVerseJSON);
+
+app.get('/stremio.m3u', serveStremioM3U);
+app.get('/stremio.m3u8', serveStremioM3U);
+app.get('/nuvio-stremio.m3u', serveStremioM3U);
+app.get('/api/stremio.m3u', serveStremioM3U);
+app.get('/stremio.json', serveStremioJSON);
+app.get('/api/stremio.json', serveStremioJSON);
 
 // Vite Integration & Static Hosting
 async function startServer() {

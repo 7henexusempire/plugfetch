@@ -80,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="p-5 border-b border-slate-800 flex items-center justify-between sticky top-0 bg-slate-900/95 backdrop-blur z-10">
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Clock className="w-4 h-4 text-cyan-400" />
+              <Clock className="w-4 h-4 text-amber-400" />
               <span>Global Settings &amp; VPS Configuration</span>
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -100,14 +100,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* Public Base URL (for Contabo VPS / Custom Domain) */}
           <div>
             <label className="block text-slate-300 font-semibold mb-1 flex items-center gap-1.5">
-              <Globe className="w-3.5 h-3.5 text-cyan-400" />
+              <Globe className="w-3.5 h-3.5 text-amber-400" />
               <span>VPS Public IP or Custom Domain URL (optional)</span>
             </label>
             <input
               type="text"
               value={publicBaseUrl}
               onChange={(e) => setPublicBaseUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
               placeholder="e.g. http://194.163.xxx.xxx:3000 or https://iptv.mydomain.com"
             />
             <p className="text-[11px] text-slate-400 mt-1">
@@ -124,7 +124,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <select
                 value={interval}
                 onChange={(e) => setIntervalVal(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500 cursor-pointer"
               >
                 <option value={15}>Every 15 minutes (High freshness)</option>
                 <option value={30}>Every 30 minutes (Recommended)</option>
@@ -162,7 +162,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="text"
               value={customTvgUrl}
               onChange={(e) => setCustomTvgUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-500"
               placeholder="e.g. https://avkb.short.gy/jioepg.xml.gz"
             />
             <p className="text-[11px] text-slate-400 mt-1">
@@ -171,13 +171,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {/* Intelligent Stream Deduplication Engine */}
-          <div className="bg-slate-950 border border-cyan-500/30 rounded-xl p-3.5 space-y-2">
+          <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-3.5 space-y-2">
             <div className="flex items-center justify-between">
               <h4 className="font-bold text-white text-xs flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                <span className="w-2 h-2 rounded-full bg-amber-400"></span>
                 <span>Stream Deduplication Engine</span>
               </h4>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-500/40 text-cyan-300">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-950/60 border border-amber-500/40 text-amber-300">
                 Active
               </span>
             </div>
@@ -187,7 +187,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
             <div className="grid grid-cols-2 gap-2 pt-1">
               <label className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
-                dedupMode === 'smart' ? 'bg-cyan-950/60 border-cyan-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
+                dedupMode === 'smart' ? 'bg-amber-950/60 border-amber-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
               }`}>
                 <input
                   type="radio"
@@ -197,12 +197,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={() => setDedupMode('smart')}
                   className="sr-only"
                 />
-                <div className="font-bold text-xs text-cyan-300">Smart Disambiguation</div>
+                <div className="font-bold text-xs text-amber-300">Smart Disambiguation</div>
                 <div className="text-[10px] text-slate-400 mt-0.5">Removes exact dupes; labels multi-streams [Stream 1], [Stream 2]</div>
               </label>
 
               <label className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
-                dedupMode === 'strict' ? 'bg-cyan-950/60 border-cyan-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
+                dedupMode === 'strict' ? 'bg-amber-950/60 border-amber-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-400'
               }`}>
                 <input
                   type="radio"
@@ -226,7 +226,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="checkbox"
                 checked={zeotvStripSuffix}
                 onChange={(e) => setZeotvStripSuffix(e.target.checked)}
-                className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-0"
+                className="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0"
               />
               <span>Remove <code>| STREAMX</code> suffix from category names (e.g. <em>JioHotstar | STREAMX &rarr; JioHotstar</em>)</span>
             </label>
@@ -236,7 +236,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 type="checkbox"
                 checked={zeotvRemoveGroupLogo}
                 onChange={(e) => setZeotvRemoveGroupLogo(e.target.checked)}
-                className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-0"
+                className="w-4 h-4 rounded text-amber-500 bg-slate-900 border-slate-700 focus:ring-0"
               />
               <span>Remove default group logos from ZeoTV categories</span>
             </label>
@@ -251,7 +251,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               type="text"
               value={userAgent}
               onChange={(e) => setUserAgent(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-300 font-mono focus:outline-none focus:border-amber-500"
               placeholder="Mozilla/5.0 ... IPTV"
             />
           </div>
@@ -313,7 +313,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shadow-md shadow-cyan-600/25 transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-500 text-white font-semibold text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{isSaving ? 'Saving...' : 'Save Settings'}</span>

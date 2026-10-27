@@ -74,7 +74,7 @@ export const StreamPlayerModal: React.FC<StreamPlayerModalProps> = ({ channel, o
                   className="w-full h-full object-contain"
                 />
               ) : (
-                <Play className="w-4 h-4 text-cyan-400" />
+                <Play className="w-4 h-4 text-amber-400" />
               )}
             </div>
             <div>
@@ -132,13 +132,13 @@ export const StreamPlayerModal: React.FC<StreamPlayerModalProps> = ({ channel, o
               <span className="font-semibold text-slate-300">Direct Stream URL</span>
               <button
                 onClick={handleCopy}
-                className="text-cyan-400 hover:underline flex items-center gap-1 text-[11px]"
+                className="text-amber-400 hover:underline flex items-center gap-1 text-[11px]"
               >
                 {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                 <span>{copied ? 'Copied' : 'Copy URL'}</span>
               </button>
             </div>
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-cyan-300 break-all select-all">
+            <div className="bg-slate-950 border border-slate-800 rounded-xl p-2.5 font-mono text-[11px] text-amber-400 break-all select-all">
               {streamUrl}
             </div>
           </div>

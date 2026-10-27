@@ -18,7 +18,13 @@ import {
   Search,
   Filter,
   CheckSquare,
-  Square
+  Square,
+  Play,
+  ArrowUpDown,
+  Zap,
+  ChevronDown,
+  ChevronUp,
+  Download,
 } from 'lucide-react';
 import { ChannelItem, PlaylistSource, NexusEmpireItem } from '../types';
 
@@ -44,7 +50,6 @@ interface NexusRebuildViewProps {
 export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
   onNotify,
   publicBaseUrl = '',
-  sources,
   onPreviewChannel,
 }) => {
   const [playlists, setPlaylists] = useState<RebuiltPlaylist[]>([]);
@@ -52,7 +57,7 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
   const [activePlaylist, setActivePlaylist] = useState<RebuiltPlaylist | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
-  // Available channels pool based on selected source type
+  // Available channels pool
   const [channelPool, setChannelPool] = useState<ChannelItem[]>([]);
   const [nexusEmpireItems, setNexusEmpireItems] = useState<NexusEmpireItem[]>([]);
   const [poolLoading, setPoolLoading] = useState<boolean>(false);
@@ -66,8 +71,14 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
   const [selectedPoolChannelIds, setSelectedPoolChannelIds] = useState<string[]>([]);
   const [targetCategoryForMove, setTargetCategoryForMove] = useState<string>('');
 
+  // New category name input
+  const [newCategoryName, setNewCategoryName] = useState<string>('');
+
   // Copied URL states
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  // Clean domain base without port :8443
+  const cleanBase = (publicBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://thenexusempire.com')).replace(/:8443$/, '');
 
   const fetchPlaylists = async () => {
     try {
@@ -75,6 +86,9 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
       if (res.ok) {
         const data = await res.json();
         setPlaylists(data);
+        if (data.length > 0 && !activePlaylist) {
+          setActivePlaylist(data[0]);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch rebuilt playlists:', err);
@@ -99,19 +113,17 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
     setPoolLoading(true);
     try {
       if (targetType === 'nexusempire') {
-        // If target is nexusempire, fetch channels for selected item or all
         const url = sourceOrCat && sourceOrCat !== 'all'
           ? `/api/nexusempire/${sourceOrCat}/channels`
-          : '/api/channels?sourceId=all&limit=2000';
+          : '/api/channels?sourceId=all&limit=2500';
         const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
-          // if data is array of channels or object
           const items = Array.isArray(data) ? data : (data.channels || data.items || []);
           setChannelPool(items);
         }
       } else {
-        const params = new URLSearchParams({ sourceId: sourceOrCat || 'all', limit: '2000' });
+        const params = new URLSearchParams({ sourceId: sourceOrCat || 'all', limit: '2500' });
         const res = await fetch(`/api/channels?${params.toString()}`);
         if (res.ok) {
           const data = await res.json();
@@ -140,14 +152,15 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
     const newP: RebuiltPlaylist = {
       id: `rebuild_${Date.now()}`,
       slug: `nexus-rebuilt-${Date.now().toString().slice(-4)}`,
-      name: 'New Custom Rebuilt Playlist',
-      description: 'Rebuilt using Nexus Studio Intelligent Rebuilder',
+      name: 'Custom Curated Rebuilt Playlist',
+      description: 'Rebuilt using Nexus Studio Rebuilder with custom categorized bouquets',
       targetType: 'normal',
       targetSourceOrCategory: 'all',
       customCategories: {
-        'Sports & Live': [],
-        'Entertainment & Movies': [],
-        'General Bouquet': [],
+        'Sports & Live TV': [],
+        'Cinema & Entertainment': [],
+        'News & Infotainment': [],
+        'Regional & Music': [],
       },
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -159,28 +172,20 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
   const handleSavePlaylist = async () => {
     if (!activePlaylist) return;
     try {
-      const isExisting = playlists.some((p) => p.id === activePlaylist.id);
-      const url = isExisting ? `/api/rebuilt/${activePlaylist.id}` : '/api/rebuilt';
-      const method = isExisting ? 'PUT' : 'POST';
-
-      const res = await fetch(url, {
-        method,
+      const res = await fetch('/api/rebuilt', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(activePlaylist),
       });
-
       if (res.ok) {
-        const data = await res.json();
-        onNotify('success', 'Playlist Saved', `Successfully saved "${activePlaylist.name}"`);
-        await fetchPlaylists();
+        onNotify('success', 'Playlist Saved', `Successfully updated ${activePlaylist.name}`);
         setIsEditing(false);
-        setActivePlaylist(data.playlist || activePlaylist);
+        fetchPlaylists();
       } else {
-        const err = await res.json();
-        onNotify('error', 'Save Failed', err.error || 'Could not save playlist');
+        throw new Error('Failed to save playlist');
       }
     } catch (err: any) {
-      onNotify('error', 'Save Error', err.message);
+      onNotify('error', 'Save Failed', err.message);
     }
   };
 
@@ -189,775 +194,712 @@ export const NexusRebuildView: React.FC<NexusRebuildViewProps> = ({
     try {
       const res = await fetch(`/api/rebuilt/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        onNotify('success', 'Deleted', 'Rebuilt playlist removed');
-        if (activePlaylist?.id === id) {
-          setActivePlaylist(null);
-          setIsEditing(false);
-        }
+        onNotify('info', 'Playlist Deleted');
+        if (activePlaylist?.id === id) setActivePlaylist(null);
         fetchPlaylists();
       }
     } catch (err: any) {
-      onNotify('error', 'Delete Error', err.message);
+      onNotify('error', 'Delete Failed', err.message);
     }
   };
 
-  // Auto-Categorization intelligent system
-  const handleAutoCategorize = () => {
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim() || !activePlaylist) return;
+    const cat = newCategoryName.trim();
+    if (activePlaylist.customCategories[cat]) {
+      onNotify('info', 'Category already exists');
+      return;
+    }
+    setActivePlaylist({
+      ...activePlaylist,
+      customCategories: {
+        ...activePlaylist.customCategories,
+        [cat]: [],
+      },
+    });
+    setNewCategoryName('');
+  };
+
+  const handleRemoveCategory = (catName: string) => {
     if (!activePlaylist) return;
+    const updated = { ...activePlaylist.customCategories };
+    delete updated[catName];
+    setActivePlaylist({
+      ...activePlaylist,
+      customCategories: updated,
+    });
+  };
+
+  const handleMoveBulkToCategory = (targetCat: string) => {
+    if (!activePlaylist || selectedPoolChannelIds.length === 0 || !targetCat) return;
+
+    const currentList = activePlaylist.customCategories[targetCat] || [];
+    const set = new Set([...currentList, ...selectedPoolChannelIds]);
+
+    setActivePlaylist({
+      ...activePlaylist,
+      customCategories: {
+        ...activePlaylist.customCategories,
+        [targetCat]: Array.from(set),
+      },
+    });
+
+    onNotify(
+      'success',
+      'Channels Added',
+      `Moved ${selectedPoolChannelIds.length} stream(s) into [${targetCat}]`
+    );
+    setSelectedPoolChannelIds([]);
+  };
+
+  // Smart Auto-Categorize All Channels into bouquets
+  const handleAutoCategorizeAll = () => {
+    if (!activePlaylist || channelPool.length === 0) return;
+
     const cats: Record<string, string[]> = {
-      'Sports & Action': [],
-      'Entertainment & Shows': [],
-      'Movies & Drama': [],
-      'News & Infotainment': [],
-      'Kids & Animation': [],
-      'General & Other': [],
+      'Nexus Sports HD': [],
+      'Nexus Movies & Cinema': [],
+      'Nexus Entertainment': [],
+      'Nexus 24x7 News': [],
+      'Nexus Music & Hits': [],
+      'Nexus Kids & Animation': [],
+      'Nexus Documentaries & Info': [],
     };
 
-    for (const ch of channelPool) {
-      const name = (ch.customName || ch.name || '').toLowerCase();
-      const grp = (ch.customGroup || ch.groupTitle || '').toLowerCase();
-      const combined = `${name} ${grp}`;
-
+    channelPool.forEach((ch) => {
+      const text = `${ch.name} ${ch.groupTitle || ''}`.toLowerCase();
       if (
-        combined.includes('sport') ||
-        combined.includes('cricket') ||
-        combined.includes('sports') ||
-        combined.includes('football') ||
-        combined.includes('espn') ||
-        combined.includes('ten') ||
-        combined.includes('stadium')
+        text.includes('sport') ||
+        text.includes('cricket') ||
+        text.includes('football') ||
+        text.includes('ten') ||
+        text.includes('star sports') ||
+        text.includes('willow') ||
+        text.includes('tsports') ||
+        text.includes('epl')
       ) {
-        cats['Sports & Action'].push(ch.id);
+        cats['Nexus Sports HD'].push(ch.id);
       } else if (
-        combined.includes('movie') ||
-        combined.includes('cinema') ||
-        combined.includes('hbo') ||
-        combined.includes('pix') ||
-        combined.includes('star gold') ||
-        combined.includes('set max') ||
-        combined.includes('flix')
+        text.includes('cinema') ||
+        text.includes('movie') ||
+        text.includes('gold') ||
+        text.includes('max') ||
+        text.includes('action') ||
+        text.includes('bollywood') ||
+        text.includes('hollywood')
       ) {
-        cats['Movies & Drama'].push(ch.id);
+        cats['Nexus Movies & Cinema'].push(ch.id);
       } else if (
-        combined.includes('news') ||
-        combined.includes('aaj tak') ||
-        combined.includes('republic') ||
-        combined.includes('cnn') ||
-        combined.includes('bbc') ||
-        combined.includes('ndtv')
+        text.includes('news') ||
+        text.includes('aaj tak') ||
+        text.includes('ndtv') ||
+        text.includes('india') ||
+        text.includes('cnn') ||
+        text.includes('bbc')
       ) {
-        cats['News & Infotainment'].push(ch.id);
+        cats['Nexus 24x7 News'].push(ch.id);
       } else if (
-        combined.includes('kids') ||
-        combined.includes('cartoon') ||
-        combined.includes('disney') ||
-        combined.includes('pogo') ||
-        combined.includes('nick') ||
-        combined.includes('hungama')
+        text.includes('music') ||
+        text.includes('mtv') ||
+        text.includes('9xm') ||
+        text.includes('zoom') ||
+        text.includes('zing')
       ) {
-        cats['Kids & Animation'].push(ch.id);
+        cats['Nexus Music & Hits'].push(ch.id);
       } else if (
-        combined.includes('sony') ||
-        combined.includes('star') ||
-        combined.includes('zee') ||
-        combined.includes('colors') ||
-        combined.includes('sab') ||
-        combined.includes('entertainment')
+        text.includes('kids') ||
+        text.includes('cartoon') ||
+        text.includes('pogo') ||
+        text.includes('nick') ||
+        text.includes('disney') ||
+        text.includes('hungama')
       ) {
-        cats['Entertainment & Shows'].push(ch.id);
+        cats['Nexus Kids & Animation'].push(ch.id);
+      } else if (
+        text.includes('discovery') ||
+        text.includes('nat geo') ||
+        text.includes('animal') ||
+        text.includes('history') ||
+        text.includes('science')
+      ) {
+        cats['Nexus Documentaries & Info'].push(ch.id);
       } else {
-        cats['General & Other'].push(ch.id);
+        cats['Nexus Entertainment'].push(ch.id);
       }
-    }
+    });
 
-    // Filter out empty categories
-    const cleanedCats: Record<string, string[]> = {};
+    // Remove empty categories
+    const finalCats: Record<string, string[]> = {};
     for (const [k, v] of Object.entries(cats)) {
-      if (v.length > 0) cleanedCats[k] = v;
-    }
-    if (Object.keys(cleanedCats).length === 0) {
-      cleanedCats['Main Bouquet'] = channelPool.map((c) => c.id);
+      if (v.length > 0) finalCats[k] = v;
     }
 
     setActivePlaylist({
       ...activePlaylist,
-      customCategories: cleanedCats,
-      updatedAt: new Date().toISOString(),
+      customCategories: finalCats,
     });
-    onNotify('success', 'Auto-Categorized', `Organized ${channelPool.length} streams into smart categories!`);
+
+    onNotify('success', 'Auto-Categorization Complete', `Sorted ${channelPool.length} channels into ${Object.keys(finalCats).length} curated bouquets.`);
   };
 
   const handleShuffleCategory = (catName: string) => {
     if (!activePlaylist) return;
-    const list = [...(activePlaylist.customCategories[catName] || [])];
-    // Fisher-Yates shuffle
-    for (let i = list.length - 1; i > 0; i--) {
+    const current = [...(activePlaylist.customCategories[catName] || [])];
+    // Fisher-Yates Shuffle
+    for (let i = current.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [list[i], list[j]] = [list[j], list[i]];
+      [current[i], current[j]] = [current[j], current[i]];
     }
     setActivePlaylist({
       ...activePlaylist,
       customCategories: {
         ...activePlaylist.customCategories,
-        [catName]: list,
+        [catName]: current,
       },
     });
-    onNotify('info', 'Category Shuffled', `Shuffled order for "${catName}"`);
+    onNotify('info', 'Category Shuffled', `Randomized order in ${catName}`);
   };
 
-  const handleAddCategory = () => {
+  const handleRemoveChannelFromCategory = (catName: string, channelId: string) => {
     if (!activePlaylist) return;
-    const name = prompt('Enter new category name:');
-    if (!name || !name.trim()) return;
-    const trimmed = name.trim();
-    if (activePlaylist.customCategories[trimmed]) {
-      alert('Category already exists!');
-      return;
-    }
+    const current = activePlaylist.customCategories[catName] || [];
     setActivePlaylist({
       ...activePlaylist,
       customCategories: {
         ...activePlaylist.customCategories,
-        [trimmed]: [],
+        [catName]: current.filter((id) => id !== channelId),
       },
     });
   };
 
-  const handleDeleteCategory = (catName: string) => {
-    if (!activePlaylist) return;
-    if (Object.keys(activePlaylist.customCategories).length <= 1) {
-      alert('Playlist must have at least one category.');
-      return;
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2500);
+      onNotify('success', 'Copied to Clipboard', text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2500);
+      onNotify('success', 'Copied to Clipboard', text);
     }
-    if (!confirm(`Remove category "${catName}"? Channels inside will be unassigned.`)) return;
-    const copy = { ...activePlaylist.customCategories };
-    delete copy[catName];
-    setActivePlaylist({
-      ...activePlaylist,
-      customCategories: copy,
-    });
   };
 
-  const handleRenameCategory = (oldName: string) => {
-    if (!activePlaylist) return;
-    const newName = prompt(`Rename category "${oldName}" to:`, oldName);
-    if (!newName || !newName.trim() || newName.trim() === oldName) return;
-    const trimmed = newName.trim();
-    if (activePlaylist.customCategories[trimmed]) {
-      alert('Category with that name already exists!');
-      return;
-    }
-    const copy: Record<string, string[]> = {};
-    for (const [k, v] of Object.entries(activePlaylist.customCategories)) {
-      if (k === oldName) {
-        copy[trimmed] = v;
-      } else {
-        copy[k] = v;
-      }
-    }
-    setActivePlaylist({
-      ...activePlaylist,
-      customCategories: copy,
-    });
-  };
-
-  const handleAddChannelToCategory = (channelId: string, categoryName: string) => {
-    if (!activePlaylist) return;
-    const current = activePlaylist.customCategories[categoryName] || [];
-    if (current.includes(channelId)) return; // already added
-
-    setActivePlaylist({
-      ...activePlaylist,
-      customCategories: {
-        ...activePlaylist.customCategories,
-        [categoryName]: [...current, channelId],
-      },
-    });
-  };
-
-  const handleRemoveChannelFromCategory = (channelId: string, categoryName: string) => {
-    if (!activePlaylist) return;
-    const current = activePlaylist.customCategories[categoryName] || [];
-    setActivePlaylist({
-      ...activePlaylist,
-      customCategories: {
-        ...activePlaylist.customCategories,
-        [categoryName]: current.filter((id) => id !== channelId),
-      },
-    });
-  };
-
-  const handleBulkMoveToCategory = (targetCat: string) => {
-    if (!activePlaylist || selectedPoolChannelIds.length === 0 || !targetCat) return;
-    const current = activePlaylist.customCategories[targetCat] || [];
-    // Add IDs that aren't already in this category
-    const added = [...new Set([...current, ...selectedPoolChannelIds])];
-
-    setActivePlaylist({
-      ...activePlaylist,
-      customCategories: {
-        ...activePlaylist.customCategories,
-        [targetCat]: added,
-      },
-    });
-    setSelectedPoolChannelIds([]);
-    onNotify('success', 'Bulk Moved', `Added ${selectedPoolChannelIds.length} streams to "${targetCat}"`);
-  };
-
-  const fullM3UUrl = (slug: string) => {
-    const base = publicBaseUrl || window.location.origin;
-    return `${base.replace(/\/$/, '')}/api/rebuilt/${slug}.m3u`;
-  };
-
-  const copyToClipboard = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    onNotify('success', 'Copied to Clipboard', text);
-    setTimeout(() => setCopiedId(null), 2500);
-  };
+  // Channel lookup helper
+  const channelMap = new Map<string, ChannelItem>();
+  channelPool.forEach((ch) => channelMap.set(ch.id, ch));
 
   // Filter pool channels
   const filteredPool = channelPool.filter((ch) => {
-    const name = (ch.customName || ch.name || '').toLowerCase();
-    const grp = (ch.customGroup || ch.groupTitle || '').toLowerCase();
-    const matchesSearch = !poolSearch || name.includes(poolSearch.toLowerCase()) || grp.includes(poolSearch.toLowerCase());
-    const matchesGroup = selectedPoolCategory === 'all' || grp === selectedPoolCategory.toLowerCase();
-    return matchesSearch && matchesGroup;
+    const matchesSearch =
+      poolSearch === '' ||
+      ch.name.toLowerCase().includes(poolSearch.toLowerCase()) ||
+      ch.groupTitle.toLowerCase().includes(poolSearch.toLowerCase());
+    const matchesCat =
+      selectedPoolCategory === 'all' || ch.groupTitle === selectedPoolCategory;
+    return matchesSearch && matchesCat;
   });
 
-  const uniquePoolGroups = Array.from(new Set(channelPool.map((c) => c.customGroup || c.groupTitle || 'General'))).sort();
+  const poolCategories = Array.from(
+    new Set(channelPool.map((c) => c.groupTitle).filter(Boolean))
+  );
 
   return (
     <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900/90 via-indigo-950/60 to-slate-900/90 border border-indigo-500/30 rounded-3xl p-6 backdrop-blur-xl shadow-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1.5">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 text-white shadow-lg shadow-indigo-600/30">
-              <Sparkles className="w-5 h-5" />
+      {/* Top Banner & Rebuild Manager */}
+      <div className="p-5 sm:p-6 rounded-2xl bg-black/35 backdrop-blur-md border border-white/10 shadow-2xl space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600/30 via-orange-500/20 to-cyan-600/30 border border-amber-400/30 flex items-center justify-center shrink-0 shadow-lg shadow-amber-500/10">
+              <Sparkles className="w-6 h-6 text-amber-400" />
             </div>
-            <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">Nexus Rebuild Studio</h2>
+            <div>
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Nexus Rebuild Studio</h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 border border-amber-400/40 text-amber-300 uppercase tracking-wider">
+                  Playlist Architect
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
+                Reconstruct, filter, and create organized custom playlists from{' '}
+                <span className="text-amber-300 font-semibold">Nexus Empire</span> (Zee, JioTV, AniNexus) or{' '}
+                <span className="text-indigo-300 font-semibold">Normal Playlists</span>.
+              </p>
+            </div>
           </div>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-2xl">
-            Fully rebuild, shuffle, and customize playlists. Fetch from NexusEmpire or Normal sources, auto-categorize into smart groups, bulk move streams, and generate custom M3U playlist URLs instantly.
-          </p>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={handleCreateNew}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 text-white text-xs font-semibold transition-all backdrop-blur-sm"
+            >
+              <Plus className="w-3.5 h-3.5 text-amber-400" />
+              <span>Create New Rebuilt Playlist</span>
+            </button>
+
+            {activePlaylist && (
+              <button
+                onClick={handleSavePlaylist}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white text-xs font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Save Playlist</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <button
-          onClick={handleCreateNew}
-          className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-indigo-600 hover:from-cyan-500 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm shadow-xl shadow-cyan-600/30 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Create New Rebuilt Playlist</span>
-        </button>
+        {/* Existing Playlists Selector Chips */}
+        {playlists.length > 0 && (
+          <div className="flex items-center gap-2 overflow-x-auto pt-2 scrollbar-none">
+            <span className="text-xs font-semibold text-slate-400 shrink-0">Your Playlists:</span>
+            {playlists.map((pl) => {
+              const isSelected = activePlaylist?.id === pl.id;
+              return (
+                <button
+                  key={pl.id}
+                  onClick={() => setActivePlaylist(pl)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all border ${
+                    isSelected
+                      ? 'bg-amber-500/20 border-amber-400/50 text-amber-200 shadow-md shadow-amber-950/40'
+                      : 'bg-white/[0.04] border-white/10 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Tv className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{pl.name}</span>
+                  <span className="text-[10px] font-mono px-1 rounded bg-black/40 text-slate-400">
+                    {Object.values(pl.customCategories).reduce((acc, curr) => acc + curr.length, 0)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Main Grid: Left List of Playlists, Right Editor / Viewer */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Playlists Sidebar */}
-        <div className="lg:col-span-4 bg-slate-900/80 border border-slate-800 rounded-3xl p-5 backdrop-blur-xl shadow-xl flex flex-col gap-4">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span>Your Rebuilt Playlists ({playlists.length})</span>
-            </h3>
-            <button
-              onClick={fetchPlaylists}
-              className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-              title="Refresh"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
+      {activePlaylist ? (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Active Playlist Header & Export Bar */}
+          <div className="p-5 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 space-y-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={activePlaylist.name}
+                    onChange={(e) => setActivePlaylist({ ...activePlaylist, name: e.target.value })}
+                    className="text-base sm:text-lg font-bold text-white bg-transparent border-b border-white/20 focus:border-amber-400 outline-none pb-0.5"
+                  />
+                  <span className="text-xs font-mono text-slate-400">/rebuild/{activePlaylist.slug}</span>
+                </div>
+                <input
+                  type="text"
+                  value={activePlaylist.description}
+                  onChange={(e) => setActivePlaylist({ ...activePlaylist, description: e.target.value })}
+                  placeholder="Playlist description..."
+                  className="text-xs text-slate-400 bg-transparent border-b border-transparent focus:border-white/20 outline-none w-full max-w-xl"
+                />
+              </div>
+
+              {/* Source Division: Nexus Empire vs Normal */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 p-1 rounded-xl bg-black/40 border border-white/10">
+                  <button
+                    onClick={() => {
+                      setActivePlaylist({
+                        ...activePlaylist,
+                        targetType: 'nexusempire',
+                        targetSourceOrCategory: 'all',
+                      });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activePlaylist.targetType === 'nexusempire'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Nexus Empire Feeds
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActivePlaylist({
+                        ...activePlaylist,
+                        targetType: 'normal',
+                        targetSourceOrCategory: 'all',
+                      });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                      activePlaylist.targetType === 'normal'
+                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Normal Playlists
+                  </button>
+                </div>
+
+                <button
+                  onClick={handleAutoCategorizeAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-400/30 text-amber-300 text-xs font-bold transition-all shadow-sm"
+                  title="Auto-organize channels into Sports, Movies, News, etc."
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Smart Auto-Bouquets</span>
+                </button>
+
+                <button
+                  onClick={() => handleDeletePlaylist(activePlaylist.id)}
+                  className="p-2 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-white/10"
+                  title="Delete playlist"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Clean Export URLs */}
+            <div className="pt-3 border-t border-white/10 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-black/40 border border-white/10">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Rebuilt M3U Playlist</div>
+                  <div className="text-xs font-mono text-slate-200 truncate">{`${cleanBase}/rebuild/${activePlaylist.slug}.m3u`}</div>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(`${cleanBase}/rebuild/${activePlaylist.slug}.m3u`, 'm3u')}
+                  className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-200 hover:text-white shrink-0"
+                >
+                  {copiedKey === 'm3u' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 px-3.5 py-2 rounded-xl bg-black/40 border border-white/10">
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">Rebuilt JSON Feed</div>
+                  <div className="text-xs font-mono text-slate-200 truncate">{`${cleanBase}/rebuild/${activePlaylist.slug}.json`}</div>
+                </div>
+                <button
+                  onClick={() => copyToClipboard(`${cleanBase}/rebuild/${activePlaylist.slug}.json`, 'json')}
+                  className="p-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-slate-200 hover:text-white shrink-0"
+                >
+                  {copiedKey === 'json' ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
           </div>
 
-          {isLoading ? (
-            <div className="py-12 text-center text-slate-400 text-xs">Loading playlists...</div>
-          ) : playlists.length === 0 ? (
-            <div className="py-12 text-center text-slate-400 text-xs">
-              No rebuilt playlists yet.<br />Click "Create New Rebuilt Playlist" above to start.
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-              {playlists.map((p) => {
-                const isActive = activePlaylist?.id === p.id;
-                const url = fullM3UUrl(p.slug);
-                const isCopied = copiedId === p.id;
+          {/* Rebuilder Two-Pane Workspace */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Pane: Source Channels Pool (Col 5) */}
+            <div className="lg:col-span-5 p-5 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 flex flex-col h-[750px] shadow-xl">
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-white/10">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <Tv className="w-4 h-4 text-amber-400" />
+                    <span>Source Pool ({filteredPool.length})</span>
+                  </h3>
+                  <span className="text-[10px] text-slate-400">
+                    Source: {activePlaylist.targetType === 'nexusempire' ? 'Nexus Empire Content' : 'Normal Playlists'}
+                  </span>
+                </div>
 
-                return (
-                  <div
-                    key={p.id}
-                    className={`group relative p-4 rounded-2xl border transition-all cursor-pointer ${
-                      isActive
-                        ? 'bg-gradient-to-br from-indigo-950/80 via-slate-900 to-slate-900 border-cyan-500/60 shadow-lg shadow-cyan-500/10'
-                        : 'bg-slate-950/50 border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40'
-                    }`}
-                    onClick={() => {
-                      setActivePlaylist(p);
-                      setIsEditing(false);
-                    }}
+                {/* Bulk Select All */}
+                <button
+                  onClick={() => {
+                    if (selectedPoolChannelIds.length === filteredPool.length) {
+                      setSelectedPoolChannelIds([]);
+                    } else {
+                      setSelectedPoolChannelIds(filteredPool.map((c) => c.id));
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 text-xs text-slate-300 flex items-center gap-1.5"
+                >
+                  {selectedPoolChannelIds.length === filteredPool.length ? (
+                    <CheckSquare className="w-3.5 h-3.5 text-amber-400" />
+                  ) : (
+                    <Square className="w-3.5 h-3.5" />
+                  )}
+                  <span>Select All</span>
+                </button>
+              </div>
+
+              {/* Pool Filters */}
+              <div className="py-3 space-y-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={poolSearch}
+                    onChange={(e) => setPoolSearch(e.target.value)}
+                    placeholder="Search source channels..."
+                    className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-white placeholder-slate-400 outline-none focus:border-amber-400"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedPoolCategory}
+                    onChange={(e) => setSelectedPoolCategory(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-slate-300 outline-none focus:border-amber-400"
                   >
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div>
-                        <h4 className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
-                          {p.name}
-                        </h4>
-                        <p className="text-[11px] text-slate-400 line-clamp-1">{p.description}</p>
-                      </div>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 uppercase">
-                        {p.targetType}
-                      </span>
-                    </div>
+                    <option value="all">All Groups ({channelPool.length})</option>
+                    {poolCategories.map((c) => (
+                      <option key={c} value={c}>
+                        {c} ({channelPool.filter((ch) => ch.groupTitle === c).length})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 pt-2 border-t border-slate-800/60">
-                      <span className="font-mono text-cyan-400">/api/rebuilt/{p.slug}.m3u</span>
-                      <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => copyToClipboard(url, p.id)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-                          title="Copy Full M3U URL"
-                        >
-                          {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                        </button>
-                        <button
+              {/* Bulk Move Action Bar */}
+              {selectedPoolChannelIds.length > 0 && (
+                <div className="p-2.5 mb-2 rounded-xl bg-amber-500/10 border border-amber-400/30 flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-300">
+                    {selectedPoolChannelIds.length} selected
+                  </span>
+
+                  <div className="flex items-center gap-1.5">
+                    <select
+                      value={targetCategoryForMove}
+                      onChange={(e) => setTargetCategoryForMove(e.target.value)}
+                      className="px-2 py-1 rounded-lg bg-black/60 border border-white/20 text-xs text-white"
+                    >
+                      <option value="">Choose Category...</option>
+                      {Object.keys(activePlaylist.customCategories).map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      onClick={() => handleMoveBulkToCategory(targetCategoryForMove)}
+                      disabled={!targetCategoryForMove}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold disabled:opacity-40"
+                    >
+                      Move
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Channel Pool Items List */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                {poolLoading ? (
+                  <div className="p-8 text-center text-slate-400 flex flex-col items-center gap-2">
+                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+                    <span className="text-xs">Loading channel pool...</span>
+                  </div>
+                ) : filteredPool.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-xs">
+                    No channels match criteria.
+                  </div>
+                ) : (
+                  filteredPool.map((ch) => {
+                    const isSelected = selectedPoolChannelIds.includes(ch.id);
+                    return (
+                      <div
+                        key={ch.id}
+                        className={`flex items-center justify-between gap-2 p-2 rounded-xl border transition-all ${
+                          isSelected
+                            ? 'bg-amber-500/15 border-amber-400/40 text-white'
+                            : 'bg-white/[0.03] hover:bg-white/[0.06] border-white/5 text-slate-200'
+                        }`}
+                      >
+                        <div
+                          className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                           onClick={() => {
-                            setActivePlaylist(p);
-                            setIsEditing(true);
+                            if (isSelected) {
+                              setSelectedPoolChannelIds((prev) => prev.filter((id) => id !== ch.id));
+                            } else {
+                              setSelectedPoolChannelIds((prev) => [...prev, ch.id]);
+                            }
                           }}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-cyan-600 hover:text-white text-slate-300 transition-colors"
-                          title="Edit Playlist"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
+                          <div className="shrink-0 text-slate-400">
+                            {isSelected ? (
+                              <CheckSquare className="w-4 h-4 text-amber-400" />
+                            ) : (
+                              <Square className="w-4 h-4" />
+                            )}
+                          </div>
+
+                          <div className="w-8 h-8 rounded-lg bg-black/50 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                            {ch.logo ? (
+                              <img src={ch.logo} alt={ch.name} className="w-full h-full object-contain p-0.5" />
+                            ) : (
+                              <Radio className="w-4 h-4 text-slate-400" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold truncate">{ch.name}</div>
+                            <div className="text-[10px] text-slate-400 truncate">{ch.groupTitle}</div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => onPreviewChannel(ch)}
+                            className="p-1 rounded-lg hover:bg-white/10 text-slate-300"
+                            title="Preview"
+                          >
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Right Pane: Custom Structured Categories (Col 7) */}
+            <div className="lg:col-span-7 p-5 rounded-2xl bg-black/30 backdrop-blur-md border border-white/10 flex flex-col h-[750px] shadow-xl space-y-4">
+              <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/10">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-amber-400" />
+                    <span>Curated Categories & Playlists</span>
+                  </h3>
+                  <span className="text-[10px] text-slate-400">
+                    {Object.keys(activePlaylist.customCategories).length} Category Bouquets configured
+                  </span>
+                </div>
+
+                {/* Add new Category */}
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="New Category Name..."
+                    className="px-2.5 py-1 rounded-xl bg-black/40 border border-white/15 text-xs text-white placeholder-slate-400 outline-none focus:border-amber-400 w-36 sm:w-48"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleAddCategory();
+                    }}
+                  />
+                  <button
+                    onClick={handleAddCategory}
+                    disabled={!newCategoryName.trim()}
+                    className="px-3 py-1 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold disabled:opacity-40"
+                  >
+                    + Add
+                  </button>
+                </div>
+              </div>
+
+              {/* Categories Accordion / Sections */}
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                {Object.entries(activePlaylist.customCategories).map(([catName, chIds]) => (
+                  <div
+                    key={catName}
+                    className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-amber-400" />
+                        <h4 className="text-xs sm:text-sm font-bold text-white">{catName}</h4>
+                        <span className="text-[10px] font-mono px-2 py-0.2 rounded-full bg-black/40 text-amber-300 border border-white/10">
+                          {chIds.length} channels
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => handleDeletePlaylist(p.id)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-600 hover:text-white text-rose-300 transition-colors"
-                          title="Delete"
+                          onClick={() => handleShuffleCategory(catName)}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-[11px] text-slate-300 border border-white/10"
+                          title="Randomize channel order"
+                        >
+                          <Shuffle className="w-3 h-3 text-amber-400" />
+                          <span>Shuffle</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleRemoveCategory(catName)}
+                          className="p-1 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-300"
+                          title="Delete Category"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
 
-        {/* Editor & Rebuilder Workspace */}
-        <div className="lg:col-span-8 bg-slate-900/80 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col gap-6">
-          {!activePlaylist ? (
-            <div className="py-24 text-center text-slate-400 flex flex-col items-center justify-center gap-4">
-              <div className="p-4 rounded-2xl bg-slate-800/80 text-cyan-400 shadow-inner">
-                <Sparkles className="w-8 h-8" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white mb-1">No Playlist Selected</h3>
-                <p className="text-xs text-slate-400 max-w-sm">
-                  Select a rebuilt playlist from the left list or create a new one to start rebuilding and organizing categories.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Header & Meta */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
-                <div className="space-y-1 flex-1 w-full">
-                  {isEditing ? (
-                    <div className="space-y-3">
-                      <input
-                        type="text"
-                        value={activePlaylist.name}
-                        onChange={(e) => setActivePlaylist({ ...activePlaylist, name: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm font-bold text-white focus:border-cyan-500 outline-none"
-                        placeholder="Playlist Name"
-                      />
-                      <input
-                        type="text"
-                        value={activePlaylist.slug}
-                        onChange={(e) => setActivePlaylist({ ...activePlaylist, slug: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs font-mono text-cyan-300 focus:border-cyan-500 outline-none"
-                        placeholder="URL slug (e.g. custom-sports)"
-                      />
-                      <textarea
-                        value={activePlaylist.description}
-                        onChange={(e) => setActivePlaylist({ ...activePlaylist, description: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-300 focus:border-cyan-500 outline-none resize-none h-16"
-                        placeholder="Playlist description"
-                      />
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-400 mb-1 block">Source Target Type</label>
-                          <select
-                            value={activePlaylist.targetType}
-                            onChange={(e) =>
-                              setActivePlaylist({
-                                ...activePlaylist,
-                                targetType: e.target.value as 'nexusempire' | 'normal',
-                                targetSourceOrCategory: 'all',
-                              })
-                            }
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                          >
-                            <option value="normal">Normal Playlists / All Sources</option>
-                            <option value="nexusempire">NexusEmpire Streams</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="text-[11px] font-bold text-slate-400 mb-1 block">Source Feed / Category</label>
-                          <select
-                            value={activePlaylist.targetSourceOrCategory}
-                            onChange={(e) =>
-                              setActivePlaylist({ ...activePlaylist, targetSourceOrCategory: e.target.value })
-                            }
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white outline-none"
-                          >
-                            <option value="all">All Sources / Feeds</option>
-                            {activePlaylist.targetType === 'nexusempire'
-                              ? nexusEmpireItems.map((n) => (
-                                  <option key={n.id} value={n.slug}>
-                                    {n.name} ({n.category})
-                                  </option>
-                                ))
-                              : sources.map((s) => (
-                                  <option key={s.id} value={s.id}>
-                                    {s.name}
-                                  </option>
-                                ))}
-                          </select>
-                        </div>
+                    {/* Channels in this category */}
+                    {chIds.length === 0 ? (
+                      <div className="p-4 rounded-xl border border-dashed border-white/10 text-center text-xs text-slate-500">
+                        Drop or select channels from the left pool to populate this bouquet.
                       </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-white">{activePlaylist.name}</h3>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                          {activePlaylist.targetType}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400">{activePlaylist.description}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[11px] font-mono text-cyan-400 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">
-                          {fullM3UUrl(activePlaylist.slug)}
-                        </span>
-                        <button
-                          onClick={() => copyToClipboard(fullM3UUrl(activePlaylist.slug), 'active_url')}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-colors"
-                        >
-                          {copiedId === 'active_url' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                          <span>Copy M3U URL</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+                        {chIds.map((chId) => {
+                          const channel = channelMap.get(chId);
+                          return (
+                            <div
+                              key={chId}
+                              className="flex items-center justify-between gap-2 p-2 rounded-xl bg-black/40 border border-white/5 text-xs text-slate-200"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div className="w-6 h-6 rounded bg-black/60 border border-white/10 flex items-center justify-center overflow-hidden shrink-0">
+                                  {channel?.logo ? (
+                                    <img src={channel.logo} alt="" className="w-full h-full object-contain" />
+                                  ) : (
+                                    <Radio className="w-3 h-3 text-slate-400" />
+                                  )}
+                                </div>
+                                <span className="truncate font-medium">{channel?.name || chId}</span>
+                              </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-center">
-                  {isEditing ? (
-                    <>
-                      <button
-                        onClick={handleSavePlaylist}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors"
-                      >
-                        <Save className="w-4 h-4" />
-                        <span>Save Changes</span>
-                      </button>
-                      <button
-                        onClick={() => setIsEditing(false)}
-                        className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditing(true)}
-                      className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 text-xs font-bold transition-colors border border-cyan-500/30"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                      <span>Edit Details</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Toolbar: Auto-Categorize, Add Category, Bulk Move */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={handleAutoCategorize}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white text-xs font-bold shadow-md shadow-indigo-600/20 transition-all"
-                    title="Automatically sort channels into Sports, Movies, News, Entertainment, etc."
-                  >
-                    <Sparkles className="w-4 h-4 text-cyan-300" />
-                    <span>Auto-Categorize All ({channelPool.length} streams)</span>
-                  </button>
-
-                  <button
-                    onClick={handleAddCategory}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors border border-slate-700"
-                  >
-                    <FolderPlus className="w-4 h-4 text-cyan-400" />
-                    <span>Add Category</span>
-                  </button>
-                </div>
-
-                {/* Bulk move dropdown */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">
-                    {selectedPoolChannelIds.length} selected in pool
-                  </span>
-                  <select
-                    value={targetCategoryForMove}
-                    onChange={(e) => setTargetCategoryForMove(e.target.value)}
-                    className="bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                  >
-                    <option value="">Move selected to...</option>
-                    {Object.keys(activePlaylist.customCategories).map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => handleBulkMoveToCategory(targetCategoryForMove)}
-                    disabled={selectedPoolChannelIds.length === 0 || !targetCategoryForMove}
-                    className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-bold transition-colors"
-                  >
-                    Move
-                  </button>
-                </div>
-              </div>
-
-              {/* Categories & Stream Pool Split */}
-              <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-                {/* Left: Custom Categories & Assigned Channels */}
-                <div className="xl:col-span-7 space-y-4">
-                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                    <span>Custom Rebuilt Categories ({Object.keys(activePlaylist.customCategories).length})</span>
-                    <span className="text-cyan-400">
-                      Total assigned:{' '}
-                      {Object.values(activePlaylist.customCategories).reduce((acc, arr) => acc + arr.length, 0)}
-                    </span>
-                  </h4>
-
-                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
-                    {Object.entries(activePlaylist.customCategories).map(([catName, channelIds]) => {
-                      const channelMap = new Map(channelPool.map((c) => [c.id, c]));
-
-                      return (
-                        <div key={catName} className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
-                              <h5 className="text-sm font-bold text-white">{catName}</h5>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-300">
-                                {channelIds.length} streams
-                              </span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => handleShuffleCategory(catName)}
-                                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-cyan-300 transition-colors"
-                                title="Shuffle Category Order"
-                              >
-                                <Shuffle className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleRenameCategory(catName)}
-                                className="p-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 transition-colors"
-                                title="Rename Category"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteCategory(catName)}
-                                className="p-1.5 rounded-lg bg-slate-900 hover:bg-rose-950 text-rose-300 transition-colors"
-                                title="Delete Category"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {channelIds.length === 0 ? (
-                            <div className="py-6 text-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
-                              No channels in this category yet. Select and move streams from the pool on the right.
-                            </div>
-                          ) : (
-                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                              {channelIds.map((cId) => {
-                                const ch = channelMap.get(cId);
-                                if (!ch) return null;
-                                const displayName = ch.customName || ch.name;
-
-                                return (
-                                  <div
-                                    key={cId}
-                                    className="flex items-center justify-between gap-2 p-2 rounded-xl bg-slate-900/90 border border-slate-800 text-xs"
+                              <div className="flex items-center gap-1 shrink-0">
+                                {channel && (
+                                  <button
+                                    onClick={() => onPreviewChannel(channel)}
+                                    className="p-1 hover:text-amber-300"
+                                    title="Play"
                                   >
-                                    <div className="flex items-center gap-2.5 truncate">
-                                      {ch.customLogo || ch.tvgLogo ? (
-                                        <img
-                                          src={ch.customLogo || ch.tvgLogo}
-                                          alt=""
-                                          className="w-6 h-6 rounded object-contain bg-slate-950"
-                                          onError={(e) => {
-                                            (e.target as HTMLElement).style.display = 'none';
-                                          }}
-                                        />
-                                      ) : (
-                                        <div className="w-6 h-6 rounded bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold">
-                                          TV
-                                        </div>
-                                      )}
-                                      <span className="font-semibold text-slate-200 truncate">{displayName}</span>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 shrink-0">
-                                      <button
-                                        onClick={() => onPreviewChannel(ch)}
-                                        className="p-1 rounded bg-slate-800 hover:bg-cyan-600 text-slate-300 hover:text-white transition-colors"
-                                        title="Preview Stream"
-                                      >
-                                        <ExternalLink className="w-3 h-3" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleRemoveChannelFromCategory(cId, catName)}
-                                        className="p-1 rounded bg-slate-800 hover:bg-rose-600 text-rose-300 hover:text-white transition-colors"
-                                        title="Remove from category"
-                                      >
-                                        <Trash2 className="w-3 h-3" />
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
+                                    <Play className="w-3 h-3 fill-current" />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleRemoveChannelFromCategory(catName, chId)}
+                                  className="p-1 hover:text-rose-400 text-slate-400"
+                                  title="Remove"
+                                >
+                                  &times;
+                                </button>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-
-                {/* Right: Available Channels Pool */}
-                <div className="xl:col-span-5 bg-slate-950/80 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                      <Tv className="w-4 h-4 text-indigo-400" />
-                      <span>Available Stream Pool ({filteredPool.length})</span>
-                    </h4>
-                    <button
-                      onClick={() => {
-                        if (selectedPoolChannelIds.length === filteredPool.length) {
-                          setSelectedPoolChannelIds([]);
-                        } else {
-                          setSelectedPoolChannelIds(filteredPool.map((c) => c.id));
-                        }
-                      }}
-                      className="text-[11px] text-cyan-400 hover:underline"
-                    >
-                      {selectedPoolChannelIds.length === filteredPool.length ? 'Deselect All' : 'Select All'}
-                    </button>
-                  </div>
-
-                  {/* Search & Category Filter */}
-                  <div className="space-y-2">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
-                      <input
-                        type="text"
-                        value={poolSearch}
-                        onChange={(e) => setPoolSearch(e.target.value)}
-                        placeholder="Search available streams..."
-                        className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white focus:border-cyan-500 outline-none"
-                      />
-                    </div>
-
-                    <select
-                      value={selectedPoolCategory}
-                      onChange={(e) => setSelectedPoolCategory(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none"
-                    >
-                      <option value="all">All Original Groups ({uniquePoolGroups.length})</option>
-                      {uniquePoolGroups.map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {poolLoading ? (
-                    <div className="py-20 text-center text-slate-500 text-xs">Loading channel pool...</div>
-                  ) : filteredPool.length === 0 ? (
-                    <div className="py-20 text-center text-slate-500 text-xs">No streams match your filter.</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
-                      {filteredPool.map((ch) => {
-                        const isSelected = selectedPoolChannelIds.includes(ch.id);
-                        const displayName = ch.customName || ch.name;
-
-                        return (
-                          <div
-                            key={ch.id}
-                            onClick={() => {
-                              setSelectedPoolChannelIds((prev) =>
-                                isSelected ? prev.filter((id) => id !== ch.id) : [...prev, ch.id]
-                              );
-                            }}
-                            className={`flex items-center justify-between gap-2 p-2 rounded-xl border cursor-pointer transition-colors ${
-                              isSelected
-                                ? 'bg-indigo-950/40 border-indigo-500/60 text-white'
-                                : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900 text-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 truncate">
-                              <button type="button" className="text-cyan-400">
-                                {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4 text-slate-600" />}
-                              </button>
-                              <span className="font-semibold truncate text-xs">{displayName}</span>
-                            </div>
-
-                            {/* Quick Add Buttons to Categories */}
-                            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                              <select
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    handleAddChannelToCategory(ch.id, e.target.value);
-                                    e.target.value = '';
-                                  }
-                                }}
-                                defaultValue=""
-                                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-[10px] text-cyan-300 outline-none"
-                                title="Add directly to category"
-                              >
-                                <option value="" disabled>
-                                  + Add to...
-                                </option>
-                                {Object.keys(activePlaylist.customCategories).map((cat) => (
-                                  <option key={cat} value={cat}>
-                                    {cat}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                ))}
               </div>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="p-12 rounded-2xl bg-black/30 border border-white/10 text-center text-slate-400 space-y-3">
+          <Sparkles className="w-10 h-10 text-amber-400 mx-auto" />
+          <h3 className="text-base font-bold text-white">No Rebuilt Playlist Selected</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Select an existing rebuilt playlist from above or click "Create New Rebuilt Playlist" to customize streams, reorganize categories, and generate bespoke M3U feeds.
+          </p>
+          <button
+            onClick={handleCreateNew}
+            className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold shadow-lg shadow-amber-500/20"
+          >
+            Create Playlist Now
+          </button>
+        </div>
+      )}
     </div>
   );
 };

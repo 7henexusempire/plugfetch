@@ -312,7 +312,7 @@ export const AniNexusView: React.FC<AniNexusViewProps> = ({
                         {onPreviewChannel && (
                           <button
                             onClick={() => onPreviewChannel(ch)}
-                            className="p-1 text-slate-400 hover:text-cyan-300 shrink-0"
+                            className="p-1 text-slate-400 hover:text-amber-400 shrink-0"
                             title="Play"
                           >
                             <Play className="w-3 h-3" />

@@ -22,7 +22,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
             key={toast.id}
             className={`pointer-events-auto flex items-start gap-3 p-3.5 rounded-2xl border shadow-2xl backdrop-blur-xl transition-all duration-300 animate-slideUp ${
               isSuccess
-                ? 'bg-slate-900/95 border-cyan-500/80 shadow-cyan-950/50 text-slate-100'
+                ? 'bg-slate-900/95 border-amber-400/40 shadow-amber-500/20 text-slate-100'
                 : isError
                 ? 'bg-slate-900/95 border-rose-500/80 shadow-rose-950/50 text-rose-100'
                 : isLoading
@@ -32,7 +32,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({ toasts, onDismis
           >
             {/* Icon */}
             <div className="shrink-0 mt-0.5">
-              {isSuccess && <CheckCircle2 className="w-5 h-5 text-cyan-400 animate-pulse" />}
+              {isSuccess && <CheckCircle2 className="w-5 h-5 text-amber-400 animate-pulse" />}
               {isError && <AlertTriangle className="w-5 h-5 text-rose-400 animate-bounce" />}
               {isLoading && <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />}
               {!isSuccess && !isError && !isLoading && <Info className="w-5 h-5 text-slate-400" />}

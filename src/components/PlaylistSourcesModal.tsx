@@ -102,7 +102,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
         {/* Header */}
         <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-cyan-950/80 border border-cyan-500/50 flex items-center justify-center text-cyan-400">
+            <div className="w-9 h-9 rounded-xl bg-amber-950/80 border border-amber-500/50 flex items-center justify-center text-amber-400">
               <Layers className="w-5 h-5" />
             </div>
             <div>
@@ -140,7 +140,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
               </span>
               <button
                 onClick={() => setIsAdding(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-md shadow-cyan-600/20"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-500 text-white text-xs font-semibold transition-all shadow-md shadow-amber-500/20"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Remote URL</span>
@@ -170,7 +170,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
                     placeholder="e.g. CartelX Live"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
                   />
                 </div>
 
@@ -183,7 +183,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                     value={newSlug}
                     onChange={(e) => setNewSlug(e.target.value)}
                     placeholder="cartelx"
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-500"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
                   />
                 </div>
               </div>
@@ -198,14 +198,14 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
                   placeholder="https://.../playlist.m3u"
-                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-cyan-500"
+                  className="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="submit"
-                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold"
+                  className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-500 text-white text-xs font-semibold"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>Save &amp; Fetch</span>
@@ -240,7 +240,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                             type="text"
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
-                            className="w-full bg-slate-900 border border-cyan-500 rounded-lg px-3 py-1.5 text-xs text-white"
+                            className="w-full bg-slate-900 border border-amber-500 rounded-lg px-3 py-1.5 text-xs text-white"
                           />
                         </div>
                         <div>
@@ -251,7 +251,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                             type="text"
                             value={editSlug}
                             onChange={(e) => setEditSlug(e.target.value)}
-                            className="w-full bg-slate-900 border border-cyan-500 rounded-lg px-3 py-1.5 text-xs text-cyan-300 font-mono"
+                            className="w-full bg-slate-900 border border-amber-500 rounded-lg px-3 py-1.5 text-xs text-amber-300 font-mono"
                           />
                         </div>
                       </div>
@@ -279,7 +279,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSaveEdit(s.id)}
-                          className="px-3.5 py-1 rounded-lg bg-cyan-600 text-white text-xs font-semibold"
+                          className="px-3.5 py-1 rounded-lg bg-amber-500 text-white text-xs font-semibold"
                         >
                           Save Changes
                         </button>
@@ -294,7 +294,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                             onClick={() => onUpdateSource(s.id, { enabled: !s.enabled })}
                             className={`p-2 rounded-xl transition-colors ${
                               s.enabled
-                                ? 'bg-cyan-950/80 text-cyan-400 border border-cyan-500/50 hover:bg-cyan-900'
+                                ? 'bg-amber-950/80 text-amber-400 border border-amber-500/50 hover:bg-amber-900/40'
                                 : 'bg-slate-900 text-slate-600 border border-slate-800 hover:text-slate-400'
                             }`}
                             title={s.enabled ? 'Click to Disable Playlist' : 'Click to Enable Playlist'}
@@ -305,7 +305,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                           <div>
                             <div className="flex items-center gap-2">
                               <h4 className="font-bold text-white text-sm">{s.name}</h4>
-                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-cyan-400 border border-slate-800">
+                              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-900 text-amber-400 border border-slate-800">
                                 {slug}.m3u
                               </span>
                               {s.type === 'uploaded' && (
@@ -349,7 +349,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                           <span className="text-[10px] font-mono text-slate-500 uppercase shrink-0">
                             IPTV Link:
                           </span>
-                          <span className="text-xs text-cyan-300 font-mono truncate select-all">
+                          <span className="text-xs text-amber-300 font-mono truncate select-all">
                             {dedicatedUrl}
                           </span>
                         </div>
@@ -393,7 +393,7 @@ export const PlaylistSourcesModal: React.FC<PlaylistSourcesModalProps> = ({
                             disabled={isSyncing || !s.enabled}
                             className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-medium border border-slate-800 transition-colors disabled:opacity-40"
                           >
-                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-cyan-400' : ''}`} />
+                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin text-amber-400' : ''}`} />
                             <span>Sync Now</span>
                           </button>
 

@@ -72,7 +72,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
           <div>
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <span>Edit Channel</span>
-              <span className="text-xs font-mono text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
+              <span className="text-xs font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-400/40">
                 {channel.tvgId || channel.id}
               </span>
             </h3>
@@ -99,7 +99,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 font-medium"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500 font-medium"
               placeholder="e.g. Star Plus HD 1080p"
               required
             />
@@ -112,7 +112,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
               <button
                 type="button"
                 onClick={() => setIsCustomGroupInput(!isCustomGroupInput)}
-                className="text-[11px] text-cyan-400 hover:underline"
+                className="text-[11px] text-amber-400 hover:underline"
               >
                 {isCustomGroupInput ? 'Choose from existing' : '+ Type new group name'}
               </button>
@@ -123,14 +123,14 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
                 type="text"
                 value={group}
                 onChange={(e) => setGroup(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500"
                 placeholder="Type new group title..."
               />
             ) : (
               <select
                 value={group}
                 onChange={(e) => setGroup(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 cursor-pointer"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500 cursor-pointer"
               >
                 {groups.map((g) => (
                   <option key={g.name} value={g.name}>
@@ -154,7 +154,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
                 type="text"
                 value={chno}
                 onChange={(e) => setChno(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-cyan-500 font-mono"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500 font-mono"
                 placeholder="e.g. 101"
               />
             </div>
@@ -186,7 +186,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
                 type="text"
                 value={logo}
                 onChange={(e) => setLogo(e.target.value)}
-                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 font-mono"
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500 font-mono"
                 placeholder="https://example.com/logo.png"
               />
               {logo && (
@@ -204,7 +204,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
               type="text"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500 font-mono"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500 font-mono"
               placeholder="https://.../index.mpd or .m3u8"
               required
             />
@@ -215,7 +215,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
             <div className="mt-4 pt-4 border-t border-slate-800">
               <div className="flex items-center justify-between mb-2">
                 <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                  <FileCode className="w-3.5 h-3.5 text-cyan-400" />
+                  <FileCode className="w-3.5 h-3.5 text-amber-400" />
                   Kodi / TiviMate Stream Directives &amp; Auth ({channel.directives.length})
                 </span>
                 {channel.hasClearKey && (
@@ -260,7 +260,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
               <button
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shadow-md shadow-cyan-600/25 transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-500 text-white font-semibold text-xs shadow-md shadow-amber-500/20 transition-all active:scale-95 disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>

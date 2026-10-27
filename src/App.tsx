@@ -17,6 +17,9 @@ import { GroupManager } from './components/GroupManager';
 import { NexusEmpireView } from './components/NexusEmpireView';
 import { NexusRebuildView } from './components/NexusRebuildView';
 import { CloudStreamView } from './components/CloudStreamView';
+import { SkyStreamView } from './components/SkyStreamView';
+import { StremioNuvioView } from './components/StremioNuvioView';
+import { AppTab } from './components/Header';
 import { RawInspector } from './components/RawInspector';
 import { ChannelModal } from './components/ChannelModal';
 import { AddChannelModal } from './components/AddChannelModal';
@@ -48,7 +51,7 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'nexusempire' | 'aninexus' | 'rebuild' | 'cloudstream' | 'raw'>('channels');
+  const [activeTab, setActiveTab] = useState<AppTab>('channels');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState<boolean>(true);
 
@@ -520,7 +523,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+    <div className="relative min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-black">
       {/* Ambient Video Background */}
       <VideoBackground />
 
@@ -549,104 +552,6 @@ export default function App() {
           sources={sources}
           publicBaseUrl={settings.publicBaseUrl}
         />
-
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-6 border-b border-slate-800/80 pb-3">
-          <div className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-2xl backdrop-blur-xl">
-            <button
-              onClick={() => setActiveTab('channels')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'channels'
-                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Tv className="w-4 h-4" />
-              <span>Channels ({status?.totalChannels || 0})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('groups')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'groups'
-                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Layers className="w-4 h-4" />
-              <span>Categories ({groups.length})</span>
-            </button>
-
-            {/* NexusEmpire Dedicated Tab */}
-            <button
-              onClick={() => setActiveTab('nexusempire')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'nexusempire' || activeTab === 'aninexus'
-                  ? 'bg-gradient-to-r from-cyan-600 via-indigo-600 to-purple-600 text-white shadow-md shadow-indigo-600/30'
-                  : 'text-indigo-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Radio className="w-4 h-4 text-cyan-400" />
-              <span>NexusEmpire (AniTv &amp; StreamBox)</span>
-            </button>
-
-            {/* Nexus Rebuild Dedicated Tab */}
-            <button
-              onClick={() => setActiveTab('rebuild')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'rebuild'
-                  ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30'
-                  : 'text-purple-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Sparkles className="w-4 h-4 text-purple-400" />
-              <span>Nexus Rebuild</span>
-            </button>
-
-            {/* CloudStream & Live Events Tab */}
-            <button
-              onClick={() => setActiveTab('cloudstream')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'cloudstream'
-                  ? 'bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                  : 'text-teal-300 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <Radio className="w-4 h-4 text-teal-400" />
-              <span>CloudStream &amp; Live</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('raw')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                activeTab === 'raw'
-                  ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-600/30'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-              }`}
-            >
-              <FileCode className="w-4 h-4" />
-              <span>Live M3U &amp; JSON</span>
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsUploadOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-indigo-500/40 hover:border-indigo-400 text-indigo-300 hover:text-white text-xs font-semibold transition-colors"
-            >
-              <Upload className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Upload .M3U</span>
-            </button>
-
-            <button
-              onClick={() => setIsSourcesOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900 border border-cyan-800/60 hover:border-cyan-600 text-cyan-300 text-xs font-semibold transition-colors"
-            >
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span>Playlists &amp; Slugs ({sources.length})</span>
-            </button>
-          </div>
-        </div>
 
         {/* Tab Content */}
         {activeTab === 'channels' && (
@@ -709,6 +614,20 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'skystream' && (
+          <SkyStreamView
+            onNotify={notify}
+            publicBaseUrl={settings.publicBaseUrl}
+            onPreviewChannel={(ch) => setPreviewingChannel(ch)}
+          />
+        )}
+        {activeTab === 'stremio' && (
+          <StremioNuvioView
+            onNotify={notify}
+            publicBaseUrl={settings.publicBaseUrl}
+            onPreviewChannel={(ch) => setPreviewingChannel(ch)}
+          />
+        )}
         {activeTab === 'cloudstream' && (
           <CloudStreamView
             onNotify={notify}
@@ -728,7 +647,7 @@ export default function App() {
             <span>· Auto-refreshing all streams &amp; NexusEmpire feeds every {status?.syncIntervalMinutes || 30} minutes</span>
           </p>
           <p className="text-slate-400">
-            Engineered for <span className="text-cyan-300 font-semibold">OTT Navigator</span>, <span className="text-cyan-300 font-semibold">TiviMate</span>, <span className="text-indigo-300 font-semibold">AniTv</span> &amp; <span className="text-slate-200">StreamBox</span>
+            Engineered for <span className="text-amber-300 font-semibold">OTT Navigator</span>, <span className="text-amber-300 font-semibold">TiviMate</span>, <span className="text-indigo-300 font-semibold">AniTv</span> &amp; <span className="text-slate-200">StreamBox</span>
           </p>
         </div>
       </footer>

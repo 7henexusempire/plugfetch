@@ -16,11 +16,11 @@ export const NexusLogo: React.FC<NexusLogoProps> = ({ size = 'md', showText = tr
     <div className="flex items-center gap-3">
       {/* Precision Nexus Logo Brandmark with transparent backing */}
       <div
-        className={`relative ${badgeSize} rounded-xl bg-gradient-to-br from-slate-900/90 via-slate-950/90 to-black/90 border border-cyan-500/50 shadow-lg shadow-cyan-500/20 flex items-center justify-center shrink-0 group overflow-hidden backdrop-blur-md`}
+        className={`relative ${badgeSize} rounded-xl bg-gradient-to-br from-slate-900/90 via-slate-950/90 to-black/90 border border-amber-400/40 shadow-lg shadow-amber-500/20 flex items-center justify-center shrink-0 group overflow-hidden backdrop-blur-md`}
       >
         {/* Glow backdrop accent */}
-        <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 via-blue-500/10 to-indigo-500/20 opacity-70 group-hover:opacity-100 transition-opacity"></div>
-        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-orange-500/20 opacity-70 group-hover:opacity-100 transition-opacity"></div>
+        <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-amber-400/30 to-transparent"></div>
 
         {/* Cleaned High-Res Transparent Nexus Wordmark */}
         <img
@@ -35,7 +35,7 @@ export const NexusLogo: React.FC<NexusLogoProps> = ({ size = 'md', showText = tr
           <div className="flex items-center gap-2">
             <span className="font-black text-base sm:text-lg tracking-wider text-white font-mono flex items-center gap-1.5">
               <span>NEXUS</span>
-              <span className="text-cyan-400 text-xs font-sans font-semibold tracking-normal px-1.5 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40">
+              <span className="text-amber-400 text-xs font-sans font-semibold tracking-normal px-1.5 py-0.5 rounded-full bg-amber-950/60 border border-amber-400/40">
                 PRO
               </span>
             </span>

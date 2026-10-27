@@ -136,7 +136,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
       {/* 1. BULK GROUP LOGO & TOOLS PANEL */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-lg">
         <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-cyan-400" />
+          <Sparkles className="w-4 h-4 text-amber-400" />
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">
             Bulk Category Logo &amp; Organization Tools
           </h3>
@@ -151,10 +151,10 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Image className="w-3.5 h-3.5 text-cyan-400" />
+                  <Image className="w-3.5 h-3.5 text-amber-400" />
                   <span>Bulk Set Group Logo</span>
                 </span>
-                <span className="text-[11px] font-mono text-cyan-400">
+                <span className="text-[11px] font-mono text-amber-400">
                   {selectedGroups.length} categories selected
                 </span>
               </div>
@@ -165,7 +165,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                   value={bulkLogoUrl}
                   onChange={(e) => setBulkLogoUrl(e.target.value)}
                   placeholder="https://.../category-icon.png"
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-500"
                 />
                 {bulkLogoUrl && (
                   <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
@@ -193,7 +193,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                 type="button"
                 onClick={() => handleApplyBulkLogo(false)}
                 disabled={selectedGroups.length === 0 || !bulkLogoUrl.trim() || isBulkApplying}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-all shadow-md shadow-cyan-600/30 disabled:opacity-40"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-500 text-white text-xs font-semibold transition-all shadow-md shadow-amber-500/20 disabled:opacity-40"
               >
                 <Check className="w-3.5 h-3.5" />
                 <span>Apply Logo ({selectedGroups.length})</span>
@@ -211,7 +211,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
             <div>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                  <Scissors className="w-3.5 h-3.5 text-cyan-400" />
+                  <Scissors className="w-3.5 h-3.5 text-amber-400" />
                   <span>Bulk Strip Group Prefix</span>
                 </span>
                 <span className="text-[11px] text-slate-500">Cleaner names</span>
@@ -225,7 +225,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                   value={prefixToStrip}
                   onChange={(e) => setPrefixToStrip(e.target.value)}
                   placeholder="e.g. Jio TV+ | "
-                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-cyan-500"
+                  className="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-amber-500"
                 />
               </div>
             </div>
@@ -256,7 +256,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-medium transition-colors"
             >
               {selectedGroups.length === filteredGroups.length && filteredGroups.length > 0 ? (
-                <CheckSquare className="w-3.5 h-3.5 text-cyan-400" />
+                <CheckSquare className="w-3.5 h-3.5 text-amber-400" />
               ) : (
                 <Square className="w-3.5 h-3.5 text-slate-500" />
               )}
@@ -275,7 +275,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search categories..."
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500"
             />
           </div>
         </div>
@@ -303,17 +303,17 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                   <tr
                     key={g.name}
                     className={`hover:bg-slate-800/40 transition-colors ${
-                      isSelected ? 'bg-cyan-950/20' : ''
+                      isSelected ? 'bg-amber-950/60' : ''
                     }`}
                   >
                     {/* Checkbox */}
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => handleToggleSelect(g.name)}
-                        className="text-slate-400 hover:text-cyan-400"
+                        className="text-slate-400 hover:text-amber-400"
                       >
                         {isSelected ? (
-                          <CheckSquare className="w-4 h-4 text-cyan-400" />
+                          <CheckSquare className="w-4 h-4 text-amber-400" />
                         ) : (
                           <Square className="w-4 h-4 text-slate-600" />
                         )}
@@ -324,7 +324,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                     <td className="py-3 px-4">
                       <div
                         onClick={() => handleStartSingleLogo(g)}
-                        className="w-9 h-9 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden cursor-pointer hover:border-cyan-500 transition-colors"
+                        className="w-9 h-9 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center overflow-hidden cursor-pointer hover:border-amber-500 transition-colors"
                         title="Click to edit group logo"
                       >
                         {g.logo ? (
@@ -348,12 +348,12 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                             type="text"
                             value={newName}
                             onChange={(e) => setNewName(e.target.value)}
-                            className="flex-1 bg-slate-950 border border-cyan-500 rounded px-2 py-1 text-xs text-white"
+                            className="flex-1 bg-slate-950 border border-amber-500 rounded px-2 py-1 text-xs text-white"
                             autoFocus
                           />
                           <button
                             onClick={() => handleSaveRename(g.name)}
-                            className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold"
+                            className="px-2 py-1 rounded bg-amber-500 text-white font-semibold"
                           >
                             Save
                           </button>
@@ -371,12 +371,12 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                             value={singleLogoUrl}
                             onChange={(e) => setSingleLogoUrl(e.target.value)}
                             placeholder="Logo URL..."
-                            className="flex-1 bg-slate-950 border border-cyan-500 rounded px-2 py-1 text-xs text-cyan-300 font-mono"
+                            className="flex-1 bg-slate-950 border border-amber-500 rounded px-2 py-1 text-xs text-amber-300 font-mono"
                             autoFocus
                           />
                           <button
                             onClick={() => handleSaveSingleLogo(g.name)}
-                            className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold"
+                            className="px-2 py-1 rounded bg-amber-500 text-white font-semibold"
                           >
                             Save Logo
                           </button>
@@ -391,7 +391,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                         <div>
                           <span
                             onClick={() => onFilterByGroup(g.name)}
-                            className="font-semibold text-white hover:text-cyan-300 cursor-pointer transition-colors"
+                            className="font-semibold text-white hover:text-amber-300 cursor-pointer transition-colors"
                           >
                             {g.name}
                           </span>
@@ -401,7 +401,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
 
                     {/* Channel Counts */}
                     <td className="py-3 px-4 text-center font-mono">
-                      <span className="text-cyan-400 font-semibold">{g.enabledCount}</span>
+                      <span className="text-amber-400 font-semibold">{g.enabledCount}</span>
                       <span className="text-slate-500"> / {g.count}</span>
                     </td>
 
@@ -425,7 +425,7 @@ export const GroupManager: React.FC<GroupManagerProps> = ({
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => handleStartSingleLogo(g)}
-                          className="p-1.5 text-slate-400 hover:text-cyan-300 rounded hover:bg-slate-800 transition-colors"
+                          className="p-1.5 text-slate-400 hover:text-amber-300 rounded hover:bg-slate-800 transition-colors"
                           title="Set group logo"
                         >
                           <Image className="w-3.5 h-3.5" />
