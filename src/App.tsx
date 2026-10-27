@@ -15,6 +15,8 @@ import { QuickConnect } from './components/QuickConnect';
 import { ChannelList } from './components/ChannelList';
 import { GroupManager } from './components/GroupManager';
 import { NexusEmpireView } from './components/NexusEmpireView';
+import { NexusRebuildView } from './components/NexusRebuildView';
+import { CloudStreamView } from './components/CloudStreamView';
 import { RawInspector } from './components/RawInspector';
 import { ChannelModal } from './components/ChannelModal';
 import { AddChannelModal } from './components/AddChannelModal';
@@ -46,7 +48,7 @@ export default function App() {
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'nexusempire' | 'aninexus' | 'raw'>('channels');
+  const [activeTab, setActiveTab] = useState<'channels' | 'groups' | 'nexusempire' | 'aninexus' | 'rebuild' | 'cloudstream' | 'raw'>('channels');
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState<boolean>(true);
 
@@ -588,6 +590,32 @@ export default function App() {
               <span>NexusEmpire (AniTv &amp; StreamBox)</span>
             </button>
 
+            {/* Nexus Rebuild Dedicated Tab */}
+            <button
+              onClick={() => setActiveTab('rebuild')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'rebuild'
+                  ? 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white shadow-md shadow-purple-600/30'
+                  : 'text-purple-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Sparkles className="w-4 h-4 text-purple-400" />
+              <span>Nexus Rebuild</span>
+            </button>
+
+            {/* CloudStream & Live Events Tab */}
+            <button
+              onClick={() => setActiveTab('cloudstream')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeTab === 'cloudstream'
+                  ? 'bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 text-white shadow-md shadow-emerald-600/30'
+                  : 'text-teal-300 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Radio className="w-4 h-4 text-teal-400" />
+              <span>CloudStream &amp; Live</span>
+            </button>
+
             <button
               onClick={() => setActiveTab('raw')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
@@ -666,6 +694,23 @@ export default function App() {
 
         {(activeTab === 'nexusempire' || activeTab === 'aninexus') && (
           <NexusEmpireView
+            onNotify={notify}
+            publicBaseUrl={settings.publicBaseUrl}
+            onPreviewChannel={(ch) => setPreviewingChannel(ch)}
+          />
+        )}
+
+        {activeTab === 'rebuild' && (
+          <NexusRebuildView
+            onNotify={notify}
+            publicBaseUrl={settings.publicBaseUrl}
+            sources={sources}
+            onPreviewChannel={(ch) => setPreviewingChannel(ch)}
+          />
+        )}
+
+        {activeTab === 'cloudstream' && (
+          <CloudStreamView
             onNotify={notify}
             publicBaseUrl={settings.publicBaseUrl}
             onPreviewChannel={(ch) => setPreviewingChannel(ch)}

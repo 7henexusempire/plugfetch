@@ -5,6 +5,8 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { playlistService } from './src/server/playlistService';
+import { rebuildService } from './src/server/rebuildService';
+import { cloudstreamService } from './src/server/cloudstreamService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -211,6 +213,73 @@ app.get('/api/nexusempire/items/:id/channels', (req: Request, res: Response) => 
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
+});
+
+// ============================================================
+// 2B. NEXUS REBUILD STUDIO ENDPOINTS
+// ============================================================
+app.get('/api/rebuilt', (req: Request, res: Response) => {
+  return res.json(rebuildService.getAll());
+});
+
+app.post('/api/rebuilt', (req: Request, res: Response) => {
+  try {
+    const { name, description, slug, targetType, targetSourceOrCategory, customCategories } = req.body;
+    if (!name || !targetType) {
+      return res.status(400).json({ error: 'Name and targetType are required' });
+    }
+    const created = rebuildService.create({
+      name,
+      description,
+      slug,
+      targetType,
+      targetSourceOrCategory: targetSourceOrCategory || 'all',
+      customCategories: customCategories || { 'Main Bouquet': [] },
+    });
+    return res.json({ success: true, playlist: created });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/rebuilt/:id', (req: Request, res: Response) => {
+  try {
+    const updated = rebuildService.update(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Rebuilt playlist not found' });
+    return res.json({ success: true, playlist: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/rebuilt/:id', (req: Request, res: Response) => {
+  try {
+    const ok = rebuildService.delete(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/rebuilt/:slug.m3u', (req: Request, res: Response) => {
+  const allChannels = playlistService.getAllChannels('all');
+  const m3u = rebuildService.generateM3U(req.params.slug, allChannels);
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="${req.params.slug}.m3u"`);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.send(m3u);
+});
+
+app.get('/api/rebuilt/:slug.json', (req: Request, res: Response) => {
+  const p = rebuildService.getById(req.params.slug);
+  if (!p) return res.status(404).json({ error: 'Playlist not found' });
+  const allChannels = playlistService.getAllChannels('all');
+  const channelMap = new Map(allChannels.map((c) => [c.id, c]));
+  const result: any = { ...p, categories: {} };
+  for (const [cat, ids] of Object.entries(p.customCategories)) {
+    result.categories[cat] = ids.map((id) => channelMap.get(id)).filter(Boolean);
+  }
+  return res.json(result);
 });
 
 // ============================================================
@@ -541,6 +610,89 @@ app.get('/api/preview-m3u', (req: Request, res: Response) => {
     preview,
   });
 });
+
+// ============================================================
+// 2C. CLOUDSTREAM REPOS & LIVE EVENTS ENDPOINTS
+// ============================================================
+app.get('/api/cloudstream/repos', (req: Request, res: Response) => {
+  return res.json(cloudstreamService.getRepos());
+});
+
+app.post('/api/cloudstream/repos', (req: Request, res: Response) => {
+  try {
+    const { name, url } = req.body;
+    if (!name || !url) return res.status(400).json({ error: 'Name and repository URL are required' });
+    const repo = cloudstreamService.addRepo(name, url);
+    return res.json({ success: true, repo });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/cloudstream/repos/:id/sync', async (req: Request, res: Response) => {
+  try {
+    const ok = await cloudstreamService.fetchSingleRepo(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/cloudstream/repos/:id', (req: Request, res: Response) => {
+  try {
+    const ok = cloudstreamService.deleteRepo(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/cloudstream/items', (req: Request, res: Response) => {
+  return res.json(cloudstreamService.getItems());
+});
+
+app.post('/api/cloudstream/items', (req: Request, res: Response) => {
+  try {
+    const { name, url, category, logo, description } = req.body;
+    if (!name || !url) return res.status(400).json({ error: 'Name and stream URL are required' });
+    const item = cloudstreamService.addItem({ name, url, category, logo, description });
+    return res.json({ success: true, item });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/cloudstream/items/:id', (req: Request, res: Response) => {
+  try {
+    const updated = cloudstreamService.updateItem(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Item not found' });
+    return res.json({ success: true, item: updated });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/cloudstream/items/:id', (req: Request, res: Response) => {
+  try {
+    const ok = cloudstreamService.deleteItem(req.params.id);
+    return res.json({ success: ok });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+function serveCloudStreamM3U(req: Request, res: Response) {
+  const m3u = cloudstreamService.generateM3U();
+  res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+  res.setHeader('Content-Disposition', 'inline; filename="nexus_cloudstream.m3u"');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  return res.send(m3u);
+}
+
+app.get('/cloudstream.m3u', serveCloudStreamM3U);
+app.get('/cloudstream.m3u8', serveCloudStreamM3U);
+app.get('/api/cloudstream.m3u', serveCloudStreamM3U);
+app.get('/api/cloudstream/playlist.m3u', serveCloudStreamM3U);
 
 // Vite Integration & Static Hosting
 async function startServer() {
